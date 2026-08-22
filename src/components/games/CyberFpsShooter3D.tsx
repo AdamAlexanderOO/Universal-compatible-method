@@ -10,9 +10,23 @@ import {
   ArrowLeft,
   Maximize2,
   Minimize2,
+  Database,
+  Box,
+  Layers,
+  Sparkles,
 } from 'lucide-react';
 import { sounds } from '../../utils/soundEffects';
 import { createLevel4MosaicTexture } from '../../utils/mosaicCharacterRenderer';
+import { InGameModulesAssetOverlay } from './InGameModulesAssetOverlay';
+import {
+  GameModuleAsset,
+  getModulesForGame,
+} from '../../data/gameModulesMetadata';
+import {
+  getEquippedAssetForSlot,
+  createCustomAssetThreeTexture,
+  subscribeToCustomAssetChanges,
+} from '../../utils/customCharacterStore';
 
 interface CyberFpsShooterProps {
   powerOn: boolean;
@@ -37,6 +51,23 @@ export const CyberFpsShooter3D: React.FC<CyberFpsShooterProps> = ({
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
   const [wave, setWave] = useState<number>(1);
   const [enemiesRemaining, setEnemiesRemaining] = useState<number>(8);
+  const [modulesOverlayOpen, setModulesOverlayOpen] = useState<boolean>(false);
+  const [activeModules, setActiveModules] = useState<GameModuleAsset[]>(() =>
+    getModulesForGame('FPS').filter((m) => m.isEquipped)
+  );
+
+  const toggleModuleEquip = (moduleId: string) => {
+    setActiveModules((prev) => {
+      const isEq = prev.some((m) => m.id === moduleId);
+      if (isEq) {
+        return prev.filter((m) => m.id !== moduleId);
+      } else {
+        const all = getModulesForGame('FPS');
+        const found = all.find((m) => m.id === moduleId);
+        return found ? [...prev, found] : prev;
+      }
+    });
+  };
 
   const engineRef = useRef<{
     scene: THREE.Scene;
@@ -145,15 +176,64 @@ export const CyberFpsShooter3D: React.FC<CyberFpsShooterProps> = ({
     grid.position.y = 0.01;
     scene.add(grid);
 
-    // Neon Pillars / Arena Obstacles
-    const pillarGeo = new THREE.BoxGeometry(3, 10, 3);
+    // Neon Pillars / Arena Obstacles with Hand-Drawn Roman Cyber Mosaic Murals
+    const pillarGeo = new THREE.BoxGeometry(3.2, 11, 3.2);
     const pillarMat = new THREE.MeshStandardMaterial({ color: 0x161e2e, metalness: 0.8, roughness: 0.3 });
+
+    // Generate Hand-Drawn Mosaic Murals for Arena Monoliths
+    const arenaMuralMosaic1 = createLevel4MosaicTexture('ROMAN_CYBER_MOSAIC', {
+      tileSize: 3,
+      tileStyle: 'ROMAN_STONE',
+      primaryGlow: '#00f0ff',
+      groutIntensity: 40,
+    });
+    const arenaMuralMosaic2 = createLevel4MosaicTexture('CYBER_PILOT', {
+      tileSize: 3,
+      tileStyle: 'ROMAN_STONE',
+      primaryGlow: '#ffaa00',
+      groutIntensity: 40,
+    });
+    const arenaMuralMosaic3 = createLevel4MosaicTexture('GAUSS_RAILGUN', {
+      tileSize: 3,
+      tileStyle: 'QUANTUM_TRANSISTOR',
+      primaryGlow: '#00ffff',
+      groutIntensity: 35,
+    });
+
+    const muralMat1 = new THREE.MeshStandardMaterial({
+      map: arenaMuralMosaic1,
+      metalness: 0.7,
+      roughness: 0.3,
+      side: THREE.DoubleSide,
+    });
+    const muralMat2 = new THREE.MeshStandardMaterial({
+      map: arenaMuralMosaic2,
+      metalness: 0.7,
+      roughness: 0.3,
+      side: THREE.DoubleSide,
+    });
+    const muralMat3 = new THREE.MeshStandardMaterial({
+      map: arenaMuralMosaic3,
+      metalness: 0.7,
+      roughness: 0.3,
+      side: THREE.DoubleSide,
+    });
+
     for (let i = 0; i < 12; i++) {
       const pillar = new THREE.Mesh(pillarGeo, pillarMat);
       const angle = (i / 12) * Math.PI * 2;
       const radius = 18 + (i % 2) * 14;
-      pillar.position.set(Math.cos(angle) * radius, 5, Math.sin(angle) * radius);
+      pillar.position.set(Math.cos(angle) * radius, 5.5, Math.sin(angle) * radius);
       scene.add(pillar);
+
+      // Add Authentic Hand-Drawn Roman Mosaic Wall Plaque to Monolith
+      const plaqueMat = i % 3 === 0 ? muralMat1 : i % 3 === 1 ? muralMat2 : muralMat3;
+      const plaqueGeo = new THREE.PlaneGeometry(2.4, 4.2);
+      const plaqueMesh = new THREE.Mesh(plaqueGeo, plaqueMat);
+      plaqueMesh.position.set(Math.cos(angle) * radius, 6.0, Math.sin(angle) * radius);
+      plaqueMesh.rotation.y = angle + Math.PI / 2;
+      plaqueMesh.translateZ(1.65);
+      scene.add(plaqueMesh);
     }
 
     // Shared Geometries & Materials
@@ -169,6 +249,16 @@ export const CyberFpsShooter3D: React.FC<CyberFpsShooterProps> = ({
     const pMatRed = new THREE.MeshBasicMaterial({ color: 0xff0044 });
 
     // Generate Level 4 Roman Mosaic Textures for FPS Weapons & Enemies
+    const equippedWeaponAsset = getEquippedAssetForSlot('FPS_WEAPON');
+    const rifleMosaic = equippedWeaponAsset
+      ? createCustomAssetThreeTexture(equippedWeaponAsset)
+      : createLevel4MosaicTexture('PLASMA_RIFLE', {
+          tileSize: 3,
+          tileStyle: 'QUANTUM_TRANSISTOR',
+          primaryGlow: '#00f0ff',
+          groutIntensity: 40,
+        });
+
     const fpsHeavyMosaic = createLevel4MosaicTexture('GOLIATH_TITAN', {
       tileSize: 3,
       tileStyle: 'ROMAN_STONE',
@@ -179,12 +269,6 @@ export const CyberFpsShooter3D: React.FC<CyberFpsShooterProps> = ({
       tileSize: 3,
       tileStyle: 'QUANTUM_TRANSISTOR',
       primaryGlow: '#d946ef',
-      groutIntensity: 40,
-    });
-    const rifleMosaic = createLevel4MosaicTexture('PLASMA_RIFLE', {
-      tileSize: 3,
-      tileStyle: 'QUANTUM_TRANSISTOR',
-      primaryGlow: '#00f0ff',
       groutIntensity: 40,
     });
 
@@ -313,6 +397,10 @@ export const CyberFpsShooter3D: React.FC<CyberFpsShooterProps> = ({
         engineRef.current.keys[e.code] = true;
         if (e.code === 'KeyR') handleReload();
         if (e.code === 'KeyF') toggleOverdrive();
+        if (e.code === 'KeyM') {
+          setModulesOverlayOpen((prev) => !prev);
+          sounds.playClick(700);
+        }
         if (e.code === 'Space') engineRef.current.isShooting = true;
       }
     };
@@ -752,6 +840,26 @@ export const CyberFpsShooter3D: React.FC<CyberFpsShooterProps> = ({
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2 pointer-events-auto">
+          {/* Tactical 2D/3D Modules Asset Deck Button */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              setModulesOverlayOpen(true);
+              sounds.playClick(750);
+            }}
+            className="px-2.5 py-1 bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-400 text-cyan-300 rounded font-bold text-[10px] sm:text-[11px] flex items-center gap-1.5 shadow-[0_0_12px_rgba(0,240,255,0.3)] active:scale-95 transition-all"
+            title="Open 2D/3D Tactical Modules Deck (M)"
+          >
+            <Database className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+            <span className="hidden sm:inline">MODULES [M]</span>
+            <span className="sm:hidden">MODS</span>
+            <span className="px-1 py-0.2 rounded bg-cyan-400/20 text-[9px] text-cyan-200">
+              {activeModules.length}
+            </span>
+          </button>
+
           {/* Invert Look Toggle */}
           <button
             type="button"
@@ -1048,6 +1156,15 @@ export const CyberFpsShooter3D: React.FC<CyberFpsShooterProps> = ({
           )}
         </div>
       )}
+
+      {/* 2D First, then 3D Tactical In-Game Modules & Asset Deck Overlay */}
+      <InGameModulesAssetOverlay
+        isOpen={modulesOverlayOpen}
+        onClose={() => setModulesOverlayOpen(false)}
+        gameMode="FPS"
+        activeModules={activeModules}
+        onToggleModuleEquip={toggleModuleEquip}
+      />
     </div>
   );
 };

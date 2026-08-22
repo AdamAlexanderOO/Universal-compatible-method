@@ -1,4 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import gsap from 'gsap';
+import * as THREE from 'three';
 import {
   Layers,
   Sparkles,
@@ -22,10 +24,26 @@ import {
   ZoomOut,
   Move,
   Scan,
+  Box,
+  Shield,
+  Flame,
+  Rotate3d,
+  Wand2,
+  RefreshCw,
+  Orbit,
+  Split,
 } from 'lucide-react';
 import { sounds } from '../utils/soundEffects';
 import { haptics } from '../utils/haptics';
 import { AppThemeConfig } from '../utils/theme';
+import { ArmorAssemblyModal } from './ArmorAssemblyModal';
+import {
+  applyConvolutionFilter,
+  SHARPEN_KERNEL,
+  SHARP_VECTOR_KERNEL,
+  SOFT_MOSAIC_SMOOTH_KERNEL,
+  applyAiBilinearUpscaleWithNoiseReduction,
+} from '../utils/mosaicCharacterRenderer';
 
 interface RomanMosaicEngineProps {
   powerOn: boolean;
@@ -180,6 +198,66 @@ const PRESET_PROFILES: KnownImageProfile[] = [
     equationsCount: 320,
     description: 'Ancient Roman mosaic tesserae hybridized with quantum transistor routing paths.',
   },
+  {
+    id: 'VALKYRIE_GUNDAM',
+    name: 'Valkyrie Aerial Gundam Frame',
+    category: 'Playable Mobile Suit Gundam',
+    gameRole: 'PLAYABLE',
+    src: '/src/assets/images/valkyrie_gundam_1787434609815.jpg',
+    dominantColors: ['#38bdf8', '#fbbf24', '#f43f5e', '#0f172a'],
+    characteristicLines: ['V-Fin Antenna Crest (45°)', 'Wing Binder Sweeps (60°)', 'Chest Reactor Well', 'Leg Armor Articulation (75°)'],
+    complexityIndex: 97,
+    equationsCount: 360,
+    description: 'High-mobility aerial Gundam mobile suit featuring ornate gold-inlaid Roman mosaic hull armor and twin beam wing binders.',
+  },
+  {
+    id: 'GAUSS_RAILGUN',
+    name: 'Heavy Gauss Railgun Cannon',
+    category: 'Heavy Kinetic Weapon',
+    gameRole: 'WEAPON',
+    src: '/src/assets/images/gauss_railgun_1787434622054.jpg',
+    dominantColors: ['#00f0ff', '#1e293b', '#3b82f6', '#f59e0b'],
+    characteristicLines: ['Twin Linear Accelerator Rails (0°)', 'Superconducting Magnetic Coils (r=16)', 'Heatsink Fin Array', 'Capacitor Bank Segment'],
+    complexityIndex: 91,
+    equationsCount: 295,
+    description: 'Electromagnetic hyper-velocity railgun weapon rendered with blue capacitor glow and Roman stone barrel shroud.',
+  },
+  {
+    id: 'STEALTH_CORVETTE',
+    name: 'Shadow Stealth Corvette Warship',
+    category: 'Tactical Space Warship',
+    gameRole: 'PLAYABLE',
+    src: '/src/assets/images/stealth_corvette_1787434635548.jpg',
+    dominantColors: ['#00f0ff', '#090d16', '#334155', '#38bdf8'],
+    characteristicLines: ['Radar-Absorbing Facet Angles (28°)', 'Concealed Missile Bay Hatches', 'Sub-Light Engine Exhaust Nozzle', 'Forward ECM Array'],
+    complexityIndex: 93,
+    equationsCount: 315,
+    description: 'Stealth reconnaissance warship featuring angular radar-deflecting mosaic armor plates and cyan energy nacelles.',
+  },
+  {
+    id: 'DEEP_SPACE_NEBULA',
+    name: 'Deep Space Cosmic Nebula Vista',
+    category: 'Cosmic Stellar Environment',
+    gameRole: 'RELIC',
+    src: '/src/assets/images/deep_space_nebula_1787434647356.jpg',
+    dominantColors: ['#c084fc', '#06b6d4', '#020617', '#f472b6'],
+    characteristicLines: ['Stellar Dust Filament Curves', 'Ionized Gas Vortex Arc (r=120)', 'Protostar Cluster Vectors', 'Bipolar Outflow Jet'],
+    complexityIndex: 96,
+    equationsCount: 420,
+    description: 'Vibrant stellar nursery and ionized gas clouds with hand-painted Roman mosaic stardust tesserae.',
+  },
+  {
+    id: 'BEAM_SABER',
+    name: 'Hyper-Beam Particle Saber',
+    category: 'Melee Energy Weapon',
+    gameRole: 'WEAPON',
+    src: '/src/assets/images/beam_saber_1787434660618.jpg',
+    dominantColors: ['#ec4899', '#f43f5e', '#38bdf8', '#1e1b4b'],
+    characteristicLines: ['Plasma Blade Containment Cylinder (90°)', 'Emitter Ring Corona (r=12)', 'Hilt Inscription Roman Grout', 'Power Cell Socket Base'],
+    complexityIndex: 88,
+    equationsCount: 260,
+    description: 'High-energy plasma melee blade ignited with magenta containment field and etched stone grip.',
+  },
 ];
 
 export const RomanMosaicMatrixEngine: React.FC<RomanMosaicEngineProps> = ({
@@ -224,6 +302,52 @@ export const RomanMosaicMatrixEngine: React.FC<RomanMosaicEngineProps> = ({
   const [isDrawing, setIsDrawing] = useState<boolean>(false);
   const [brushColor, setBrushColor] = useState<string>('#00f0ff');
   const [brushSize, setBrushSize] = useState<number>(8);
+
+  // Human-Readable Clarity & Refinement Engine State
+  const [clarityEnhance, setClarityEnhance] = useState<number>(45); // 0% to 100% photo blend & crisp sharpening
+  const [edgeSharpness, setEdgeSharpness] = useState<number>(60); // 0% to 100% contour line definition
+  const [subPixelSampling, setSubPixelSampling] = useState<boolean>(true); // Area-weighted subpixel sampling
+  const [showContourOutlines, setShowContourOutlines] = useState<boolean>(true); // Feature edge contour tracing
+  const [hologramResolution, setHologramResolution] = useState<'ULTRA_HD' | 'HIGH' | 'TACTICAL'>('ULTRA_HD');
+
+  // Detail Enhancement Convolution & AI Upscaling State
+  const [renderEnhanceMode, setRenderEnhanceMode] = useState<'SOFT_MOSAIC' | 'SHARP_VECTOR' | 'HYBRID_TESSERAE' | 'DETAIL_ENHANCED'>('SHARP_VECTOR');
+  const [detailConvolutionStrength, setDetailConvolutionStrength] = useState<number>(65); // 0 to 100%
+  const [enableAiUpscaleFilter, setEnableAiUpscaleFilter] = useState<boolean>(true);
+  const [noiseReductionStrength, setNoiseReductionStrength] = useState<number>(60); // 0 to 100% smoothing
+
+  // View Mode & 3D Hologram Extrusion State
+  const [viewMode, setViewMode] = useState<'2D_MOSAIC' | '3D_HOLOGRAM'>('2D_MOSAIC');
+  const [extrusionDepth, setExtrusionDepth] = useState<number>(35); // 0 to 100 mm depth-map extrusion
+  const [depthMappingAlgorithm, setDepthMappingAlgorithm] = useState<
+    'LUMINANCE_HEIGHTFIELD' | 'EDGE_NORMAL_GRADIENT' | 'TRANSISTOR_RELIEF' | 'INVERTED_TRENCH'
+  >('LUMINANCE_HEIGHTFIELD');
+  const [isExploded, setIsExploded] = useState<boolean>(false);
+  const [isArmorAssemblyOpen, setIsArmorAssemblyOpen] = useState<boolean>(false);
+  const [autoRotate3D, setAutoRotate3D] = useState<boolean>(true);
+  const hologramMountRef = useRef<HTMLDivElement>(null);
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
+  const threeSceneRef = useRef<{
+    scene: THREE.Scene;
+    camera: THREE.PerspectiveCamera;
+    renderer: THREE.WebGLRenderer;
+    instancedMesh: THREE.InstancedMesh | null;
+    group: THREE.Group;
+    tileCount: number;
+    tileMeta: Array<{
+      targetPos: THREE.Vector3;
+      scatterPos: THREE.Vector3;
+      targetRot: THREE.Euler;
+      scatterRot: THREE.Euler;
+      color: THREE.Color;
+      baseLuminance: number;
+      baseNormal: number;
+    }>;
+    animProgress: { val: number };
+    isDragging: boolean;
+    prevPointer: { x: number; y: number };
+    reqId: number | null;
+  } | null>(null);
 
   // Progressive Synthesis Timer
   useEffect(() => {
@@ -281,15 +405,18 @@ export const RomanMosaicMatrixEngine: React.FC<RomanMosaicEngineProps> = ({
       // Tier 200: Meso Level -> medium tiles (approx 18px)
       // Tier 150: Micro Level -> fine tiles (approx 8px)
       // Tier 50 / Ultra: Ultra Level -> micro tiles (approx 3px)
+      // Sub-Pixel Refinement: down to 2px
       let baseTileSize = 36;
-      if (fidelityTier <= 75) {
+      if (fidelityTier <= 40) {
+        baseTileSize = 2;
+      } else if (fidelityTier <= 75) {
         baseTileSize = 3;
       } else if (fidelityTier <= 165) {
-        baseTileSize = 8;
+        baseTileSize = 7;
       } else if (fidelityTier <= 245) {
-        baseTileSize = 18;
+        baseTileSize = 16;
       } else {
-        baseTileSize = 36;
+        baseTileSize = 32;
       }
 
       const calculatedCols = Math.ceil(w / baseTileSize);
@@ -326,18 +453,45 @@ export const RomanMosaicMatrixEngine: React.FC<RomanMosaicEngineProps> = ({
           const x = c * baseTileSize;
           const y = r * baseTileSize;
 
-          // Sample center pixel of this tile
-          const sampleX = Math.min(w - 1, Math.floor(x + baseTileSize / 2));
-          const sampleY = Math.min(h - 1, Math.floor(y + baseTileSize / 2));
-          const idx = (sampleY * w + sampleX) * 4;
+          let red = 0;
+          let green = 0;
+          let blue = 0;
 
-          const red = imgData[idx];
-          const green = imgData[idx + 1];
-          const blue = imgData[idx + 2];
-          const brightness = (red + green + blue) / 3;
+          if (subPixelSampling && baseTileSize >= 3) {
+            // Area-weighted sub-pixel integration for photorealistic smooth color transitions
+            let rSum = 0;
+            let gSum = 0;
+            let bSum = 0;
+            let ptCount = 0;
+            const sampleStep = Math.max(1, Math.floor(baseTileSize / 3));
+
+            for (let dy = 0; dy < baseTileSize; dy += sampleStep) {
+              for (let dx = 0; dx < baseTileSize; dx += sampleStep) {
+                const px = Math.min(w - 1, x + dx);
+                const py = Math.min(h - 1, y + dy);
+                const pIdx = (py * w + px) * 4;
+                rSum += imgData[pIdx];
+                gSum += imgData[pIdx + 1];
+                bSum += imgData[pIdx + 2];
+                ptCount++;
+              }
+            }
+            red = Math.round(rSum / Math.max(1, ptCount));
+            green = Math.round(gSum / Math.max(1, ptCount));
+            blue = Math.round(bSum / Math.max(1, ptCount));
+          } else {
+            const sampleX = Math.min(w - 1, Math.floor(x + baseTileSize / 2));
+            const sampleY = Math.min(h - 1, Math.floor(y + baseTileSize / 2));
+            const idx = (sampleY * w + sampleX) * 4;
+            red = imgData[idx];
+            green = imgData[idx + 1];
+            blue = imgData[idx + 2];
+          }
+
+          const brightness = (red * 0.299 + green * 0.587 + blue * 0.114);
 
           // Slight random stone variation for Roman mosaic authenticity
-          const stoneJitter = tileStyle === 'ROMAN_STONE' ? ((c * 7 + r * 13) % 15) - 7 : 0;
+          const stoneJitter = tileStyle === 'ROMAN_STONE' ? ((c * 7 + r * 13) % 9) - 4 : 0;
           const finalR = Math.max(0, Math.min(255, red + stoneJitter));
           const finalG = Math.max(0, Math.min(255, green + stoneJitter));
           const finalB = Math.max(0, Math.min(255, blue + stoneJitter));
@@ -345,56 +499,95 @@ export const RomanMosaicMatrixEngine: React.FC<RomanMosaicEngineProps> = ({
           // Draw Tile
           ctx.fillStyle = `rgb(${finalR}, ${finalG}, ${finalB})`;
 
-          const grout = (groutIntensity / 100) * (baseTileSize > 10 ? 2 : 1);
+          const grout = (groutIntensity / 100) * (baseTileSize > 8 ? 2 : baseTileSize > 4 ? 1 : 0);
           const drawW = Math.max(1, baseTileSize - (tileStyle === 'ROMAN_STONE' || tileStyle === 'QUANTUM_TRANSISTOR' ? grout : 0));
           const drawH = Math.max(1, baseTileSize - (tileStyle === 'ROMAN_STONE' || tileStyle === 'QUANTUM_TRANSISTOR' ? grout : 0));
 
           if (tileStyle === 'ROMAN_STONE') {
             // Rounded rectangular stone tesserae
-            const radius = Math.min(4, drawW / 4);
+            const radius = Math.min(3, drawW / 4);
             ctx.beginPath();
             ctx.roundRect(x, y, drawW, drawH, radius);
             ctx.fill();
 
             // Subtle highlight on top-left of tesserae
             if (baseTileSize > 12) {
-              ctx.strokeStyle = `rgba(255, 255, 255, ${0.15 * (brightness / 255)})`;
+              ctx.strokeStyle = `rgba(255, 255, 255, ${0.18 * (brightness / 255)})`;
               ctx.lineWidth = 1;
               ctx.stroke();
             }
           } else if (tileStyle === 'QUANTUM_TRANSISTOR') {
             // Sharp transistor gate cells with central quantum contact dot
             ctx.fillRect(x, y, drawW, drawH);
-            if (baseTileSize > 10 && brightness > 80) {
+            if (baseTileSize > 8 && brightness > 90) {
               ctx.fillStyle = theme.primary;
               ctx.beginPath();
               ctx.arc(x + drawW / 2, y + drawH / 2, Math.max(1, drawW / 6), 0, Math.PI * 2);
               ctx.fill();
             }
           } else if (tileStyle === 'GLYPH_CIPHER') {
-            // Hierarchical Roman / Quantum alphanumeric glyph matrix
-            ctx.fillStyle = 'rgba(10, 15, 25, 0.9)';
+            // High-Legibility Roman & Quantum Alphanumeric Cypher
+            // Retains background color tonal richness so human facial & armor anatomy is 100% clear
+            ctx.fillStyle = `rgba(${Math.round(finalR * 0.22)}, ${Math.round(finalG * 0.22)}, ${Math.round(finalB * 0.22)}, 0.92)`;
             ctx.fillRect(x, y, baseTileSize, baseTileSize);
 
-            const glyphs = '0123456789ABCDEFΣΩΨΦΛΓΔΞΘ';
-            const charIdx = (c * 17 + r * 31 + Math.floor(brightness)) % glyphs.length;
+            // Luminance-weighted character selection for human-readable portrait shading
+            const glyphs = ' .·:;+=!i1tfLCG08#@ΣΩΨΦΛΓΔΞΘ';
+            const charIdx = Math.min(glyphs.length - 1, Math.floor((brightness / 255) * glyphs.length));
             const char = glyphs[charIdx];
 
             ctx.fillStyle = `rgb(${finalR}, ${finalG}, ${finalB})`;
-            ctx.font = `${Math.max(8, Math.floor(baseTileSize * 0.75))}px monospace`;
+            ctx.font = `bold ${Math.max(7, Math.floor(baseTileSize * 0.85))}px monospace`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(char, x + baseTileSize / 2, y + baseTileSize / 2);
           } else {
             // NEON CIRCUIT
             ctx.fillRect(x, y, drawW, drawH);
-            if ((c + r) % 3 === 0) {
+            if ((c + r) % 4 === 0) {
               ctx.strokeStyle = theme.primary;
               ctx.lineWidth = 1;
               ctx.strokeRect(x, y, drawW, drawH);
             }
           }
         }
+      }
+
+      // Detail Enhancement Convolution Pass (Soft Mosaic vs Sharp Vector vs Sharpen)
+      if (renderEnhanceMode === 'SHARP_VECTOR') {
+        applyConvolutionFilter(ctx, w, h, SHARP_VECTOR_KERNEL, 1, 0);
+      } else if (renderEnhanceMode === 'DETAIL_ENHANCED') {
+        const factor = 1 + (detailConvolutionStrength / 100) * 0.75;
+        applyConvolutionFilter(ctx, w, h, SHARPEN_KERNEL, factor, 0);
+      } else if (renderEnhanceMode === 'SOFT_MOSAIC') {
+        applyConvolutionFilter(ctx, w, h, SOFT_MOSAIC_SMOOTH_KERNEL, 1, 0);
+      }
+
+      // AI Bilinear Upscaling & Noise Reduction Filter Pass (Smooths tile transitions in HD / Micro modes)
+      if (enableAiUpscaleFilter && (fidelityTier <= 165 || zoomLevel > 1)) {
+        const upscaled = applyAiBilinearUpscaleWithNoiseReduction(canvas, w, h, {
+          noiseReductionStrength: (noiseReductionStrength / 100) * 0.75,
+          preserveEdges: true,
+        });
+        ctx.clearRect(0, 0, w, h);
+        ctx.drawImage(upscaled, 0, 0);
+      }
+
+      // Clarity & High-Frequency Detail Overlay (Human-Readable Refinement)
+      if (clarityEnhance > 0) {
+        ctx.save();
+        ctx.globalAlpha = clarityEnhance / 100;
+        ctx.drawImage(img, 0, 0, w, h);
+        ctx.restore();
+      }
+
+      // Feature Contour & Linework Sharpener (Highlights facial features, eyes, swords, armor borders)
+      if (showContourOutlines && edgeSharpness > 0) {
+        ctx.save();
+        ctx.strokeStyle = `rgba(255, 255, 255, ${(edgeSharpness / 100) * 0.28})`;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(2, 2, w - 4, h - 4);
+        ctx.restore();
       }
 
       ctx.restore();
@@ -463,6 +656,14 @@ export const RomanMosaicMatrixEngine: React.FC<RomanMosaicEngineProps> = ({
     showVectorLines,
     similarityScore,
     theme,
+    clarityEnhance,
+    edgeSharpness,
+    subPixelSampling,
+    showContourOutlines,
+    renderEnhanceMode,
+    detailConvolutionStrength,
+    enableAiUpscaleFilter,
+    noiseReductionStrength,
   ]);
 
   // Handle Canvas Zoom Pan Interactions
@@ -530,6 +731,408 @@ export const RomanMosaicMatrixEngine: React.FC<RomanMosaicEngineProps> = ({
     setSimilarityScore(95 + Math.random() * 4);
     sounds.playClick(650);
     haptics.trigger('click');
+  };
+
+  // Three.js 3D Hologram Setup & Real-Time Extrusion Depth Calculator
+  const computeDepthZ = useCallback(
+    (luminance: number, normal: number, depthAlgorithm: string, depthAmount: number) => {
+      const normalizedFactor = depthAmount / 35; // base 35mm
+      switch (depthAlgorithm) {
+        case 'EDGE_NORMAL_GRADIENT':
+          return (normal / 255) * normalizedFactor * 22;
+        case 'TRANSISTOR_RELIEF':
+          return (Math.round(luminance / 64) * 64 / 255) * normalizedFactor * 18;
+        case 'INVERTED_TRENCH':
+          return ((255 - luminance) / 255) * normalizedFactor * 16;
+        case 'LUMINANCE_HEIGHTFIELD':
+        default:
+          return (luminance / 255) * normalizedFactor * 16;
+      }
+    },
+    []
+  );
+
+  // Update instance matrices based on assembly animation progress & extrusion depth
+  const updateInstanceMatrices = useCallback(
+    (progress: number) => {
+      const state = threeSceneRef.current;
+      if (!state || !state.instancedMesh) return;
+      const mesh = state.instancedMesh;
+      const dummy = new THREE.Object3D();
+      const pos = new THREE.Vector3();
+      const rot = new THREE.Euler();
+
+      state.tileMeta.forEach((meta, idx) => {
+        // Calculate dynamic extruded Z position
+        const currentTargetZ = computeDepthZ(
+          meta.baseLuminance,
+          meta.baseNormal,
+          depthMappingAlgorithm,
+          extrusionDepth
+        );
+
+        const currentTargetPos = new THREE.Vector3(
+          meta.targetPos.x,
+          meta.targetPos.y,
+          currentTargetZ
+        );
+
+        // Interpolate position from scatter/explosion to assembled target
+        pos.lerpVectors(meta.scatterPos, currentTargetPos, progress);
+
+        // Interpolate rotation
+        rot.x = meta.scatterRot.x * (1 - progress);
+        rot.y = meta.scatterRot.y * (1 - progress);
+        rot.z = meta.scatterRot.z * (1 - progress);
+
+        // Scale tile slightly when exploded
+        const scaleVal = 0.3 + 0.7 * progress;
+
+        dummy.position.copy(pos);
+        dummy.rotation.copy(rot);
+        dummy.scale.set(scaleVal, scaleVal, scaleVal);
+        dummy.updateMatrix();
+
+        mesh.setMatrixAt(idx, dummy.matrix);
+      });
+
+      mesh.instanceMatrix.needsUpdate = true;
+    },
+    [computeDepthZ, depthMappingAlgorithm, extrusionDepth]
+  );
+
+  // Initialize or Rebuild 3D Hologram Scene
+  useEffect(() => {
+    if (viewMode !== '3D_HOLOGRAM' || !powerOn) return;
+    const container = hologramMountRef.current;
+    if (!container) return;
+
+    // Clean up any existing Three.js renderer
+    if (threeSceneRef.current) {
+      if (threeSceneRef.current.reqId) {
+        cancelAnimationFrame(threeSceneRef.current.reqId);
+      }
+      threeSceneRef.current.renderer.dispose();
+      while (container.firstChild) {
+        container.removeChild(container.firstChild);
+      }
+      threeSceneRef.current = null;
+    }
+
+    const width = container.clientWidth || 560;
+    const height = container.clientHeight || 420;
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+    camera.position.set(0, 0, 95);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    container.appendChild(renderer.domElement);
+
+    const group = new THREE.Group();
+    group.rotation.x = 0.25;
+    group.rotation.y = -0.35;
+    scene.add(group);
+
+    // Hologram Ambient and Directional Lights
+    const ambientLight = new THREE.AmbientLight(0x00f0ff, 0.7);
+    scene.add(ambientLight);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    dirLight.position.set(30, 40, 50);
+    scene.add(dirLight);
+
+    const cyanPoint = new THREE.PointLight(0x00f0ff, 1.8, 120);
+    cyanPoint.position.set(-25, 20, 30);
+    scene.add(cyanPoint);
+
+    const amberPoint = new THREE.PointLight(0xf59e0b, 1.2, 100);
+    amberPoint.position.set(25, -20, 20);
+    scene.add(amberPoint);
+
+    // Floating Cyber Floor Grid
+    const gridHelper = new THREE.GridHelper(90, 18, 0x00f0ff, 0x1e293b);
+    gridHelper.position.y = -32;
+    group.add(gridHelper);
+
+    // Sample Image for 3D Mesh
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = customImageSrc || selectedProfile.src;
+
+    img.onload = () => {
+      // Dynamic Ultra-HD / High Clarity Grid Sizing
+      const sampleCols =
+        hologramResolution === 'ULTRA_HD'
+          ? 64
+          : hologramResolution === 'HIGH'
+          ? 48
+          : fidelityTier <= 75
+          ? 40
+          : fidelityTier <= 165
+          ? 30
+          : 22;
+      const sampleRows = Math.round(sampleCols * (height / width));
+      const totalTiles = sampleCols * sampleRows;
+
+      // Sample image in offscreen canvas with sub-pixel sampling
+      const offscreen = document.createElement('canvas');
+      offscreen.width = sampleCols;
+      offscreen.height = sampleRows;
+      const offCtx = offscreen.getContext('2d');
+      if (!offCtx) return;
+
+      offCtx.drawImage(img, 0, 0, sampleCols, sampleRows);
+      const imgData = offCtx.getImageData(0, 0, sampleCols, sampleRows).data;
+
+      // Box Geometry for Tesserae Tile with Crisp Bevel Ratios
+      const tileW = 54 / sampleCols;
+      const tileH = 42 / sampleRows;
+      const geometry = new THREE.BoxGeometry(tileW * 0.94, tileH * 0.94, tileW * 0.85);
+      const material = new THREE.MeshStandardMaterial({
+        roughness: 0.28,
+        metalness: 0.72,
+      });
+
+      const instancedMesh = new THREE.InstancedMesh(geometry, material, totalTiles);
+      instancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+
+      const tileMetaList: Array<{
+        targetPos: THREE.Vector3;
+        scatterPos: THREE.Vector3;
+        targetRot: THREE.Euler;
+        scatterRot: THREE.Euler;
+        color: THREE.Color;
+        baseLuminance: number;
+        baseNormal: number;
+      }> = [];
+
+      for (let r = 0; r < sampleRows; r++) {
+        for (let c = 0; c < sampleCols; c++) {
+          const idx = (r * sampleCols + c) * 4;
+          const red = imgData[idx];
+          const green = imgData[idx + 1];
+          const blue = imgData[idx + 2];
+          const lum = (red * 0.299 + green * 0.587 + blue * 0.114);
+
+          // Edge normal calculation for crisp structural feature extrusion
+          const prevXIdx = (r * sampleCols + Math.max(0, c - 1)) * 4;
+          const nextXIdx = (r * sampleCols + Math.min(sampleCols - 1, c + 1)) * 4;
+          const diffX = Math.abs(imgData[nextXIdx] - imgData[prevXIdx]);
+          const normalVal = Math.min(255, diffX * 2.2);
+
+          const gx = (c - sampleCols / 2) * tileW;
+          const gy = -(r - sampleRows / 2) * tileH;
+          const gz = computeDepthZ(lum, normalVal, depthMappingAlgorithm, extrusionDepth);
+
+          const targetPos = new THREE.Vector3(gx, gy, gz);
+          const scatterPos = new THREE.Vector3(
+            (Math.random() - 0.5) * 140,
+            (Math.random() - 0.5) * 140,
+            (Math.random() - 0.5) * 180
+          );
+
+          const targetRot = new THREE.Euler(0, 0, 0);
+          const scatterRot = new THREE.Euler(
+            Math.random() * Math.PI * 2,
+            Math.random() * Math.PI * 2,
+            Math.random() * Math.PI * 2
+          );
+
+          // Vivid Color Contrast
+          const color = new THREE.Color(
+            Math.min(1, (red / 255) * 1.08),
+            Math.min(1, (green / 255) * 1.08),
+            Math.min(1, (blue / 255) * 1.08)
+          );
+          instancedMesh.setColorAt(r * sampleCols + c, color);
+
+          tileMetaList.push({
+            targetPos,
+            scatterPos,
+            targetRot,
+            scatterRot,
+            color,
+            baseLuminance: lum,
+            baseNormal: normalVal,
+          });
+        }
+      }
+
+      if (instancedMesh.instanceColor) {
+        instancedMesh.instanceColor.needsUpdate = true;
+      }
+      group.add(instancedMesh);
+
+      const animProgress = { val: 0 };
+      threeSceneRef.current = {
+        scene,
+        camera,
+        renderer,
+        instancedMesh,
+        group,
+        tileCount: totalTiles,
+        tileMeta: tileMetaList,
+        animProgress,
+        isDragging: false,
+        prevPointer: { x: 0, y: 0 },
+        reqId: null,
+      };
+
+      // GSAP Assembling Animation: scatter -> assembled depth extrusion
+      gsap.fromTo(
+        animProgress,
+        { val: 0 },
+        {
+          val: 1,
+          duration: 1.35,
+          ease: 'power3.out',
+          onUpdate: () => {
+            updateInstanceMatrices(animProgress.val);
+          },
+          onComplete: () => {
+            setIsExploded(false);
+          },
+        }
+      );
+
+      sounds.playSpectrumLoad();
+      haptics.trigger('success');
+
+      // Animation & Render Loop
+      const animate = () => {
+        if (!threeSceneRef.current) return;
+        if (autoRotate3D && !threeSceneRef.current.isDragging) {
+          group.rotation.y += 0.005;
+        }
+        renderer.render(scene, camera);
+        threeSceneRef.current.reqId = requestAnimationFrame(animate);
+      };
+      animate();
+    };
+
+    return () => {
+      if (threeSceneRef.current) {
+        if (threeSceneRef.current.reqId) {
+          cancelAnimationFrame(threeSceneRef.current.reqId);
+        }
+        renderer.dispose();
+      }
+    };
+  }, [
+    viewMode,
+    powerOn,
+    selectedProfile,
+    customImageSrc,
+    fidelityTier,
+    computeDepthZ,
+    updateInstanceMatrices,
+    autoRotate3D,
+    hologramResolution,
+  ]);
+
+  // Real-time update of 3D depth extrusion slider
+  useEffect(() => {
+    if (viewMode === '3D_HOLOGRAM' && threeSceneRef.current) {
+      updateInstanceMatrices(threeSceneRef.current.animProgress.val);
+    }
+  }, [extrusionDepth, depthMappingAlgorithm, updateInstanceMatrices, viewMode]);
+
+  // GSAP View Mode Switch Animation (2D <-> 3D)
+  const handleSwitchViewMode = (newMode: '2D_MOSAIC' | '3D_HOLOGRAM') => {
+    if (newMode === viewMode) return;
+
+    if (newMode === '3D_HOLOGRAM') {
+      setViewMode('3D_HOLOGRAM');
+      sounds.playSpectrumLoad();
+      haptics.trigger('medium');
+    } else {
+      // Switching to 2D Blueprint: GSAP transition
+      if (threeSceneRef.current) {
+        gsap.to(threeSceneRef.current.animProgress, {
+          val: 0,
+          duration: 0.35,
+          ease: 'power2.in',
+          onUpdate: () => {
+            if (threeSceneRef.current) {
+              updateInstanceMatrices(threeSceneRef.current.animProgress.val);
+            }
+          },
+          onComplete: () => {
+            setViewMode('2D_MOSAIC');
+            sounds.playSimulatePulse();
+            haptics.trigger('light');
+            if (canvasContainerRef.current) {
+              gsap.fromTo(
+                canvasContainerRef.current,
+                { scale: 0.95, opacity: 0.4, filter: 'brightness(1.8)' },
+                { scale: 1, opacity: 1, filter: 'brightness(1)', duration: 0.45, ease: 'power2.out' }
+              );
+            }
+          },
+        });
+      } else {
+        setViewMode('2D_MOSAIC');
+      }
+    }
+  };
+
+  // GSAP Explode / Assemble Toggle
+  const handleToggleExplosion = () => {
+    const state = threeSceneRef.current;
+    if (!state) return;
+
+    const targetVal = isExploded ? 1 : 0;
+    sounds.playLaserPew();
+    haptics.trigger('click');
+
+    gsap.to(state.animProgress, {
+      val: targetVal,
+      duration: 1.15,
+      ease: isExploded ? 'elastic.out(1, 0.75)' : 'power3.out',
+      onUpdate: () => {
+        updateInstanceMatrices(state.animProgress.val);
+      },
+      onComplete: () => {
+        setIsExploded(!isExploded);
+        if (targetVal === 1) {
+          sounds.playSpectrumLoad();
+          haptics.trigger('success');
+        }
+      },
+    });
+  };
+
+  // Mouse / Touch Drag Orbit for 3D Hologram
+  const handle3DPointerDown = (e: React.MouseEvent | React.TouchEvent) => {
+    const state = threeSceneRef.current;
+    if (!state) return;
+    state.isDragging = true;
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    state.prevPointer = { x: clientX, y: clientY };
+  };
+
+  const handle3DPointerMove = (e: React.MouseEvent | React.TouchEvent) => {
+    const state = threeSceneRef.current;
+    if (!state || !state.isDragging) return;
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    const deltaX = clientX - state.prevPointer.x;
+    const deltaY = clientY - state.prevPointer.y;
+
+    state.group.rotation.y += deltaX * 0.01;
+    state.group.rotation.x = Math.max(-1.2, Math.min(1.2, state.group.rotation.x + deltaY * 0.01));
+    state.prevPointer = { x: clientX, y: clientY };
+  };
+
+  const handle3DPointerUp = () => {
+    if (threeSceneRef.current) {
+      threeSceneRef.current.isDragging = false;
+    }
   };
 
   // Drawing Canvas Methods for Draw Studio
@@ -625,13 +1228,57 @@ export const RomanMosaicMatrixEngine: React.FC<RomanMosaicEngineProps> = ({
               </span>
             </div>
             <p className="text-xs text-neutral-400 font-mono">
-              Hierarchical 300→200→150 Alphanumeric Pixel Decomposition & Line Characteristic Classifier
+              Hierarchical 300→200→150 Alphanumeric Pixel Decomposition & 3D Hologram Depth Extrusion
             </p>
           </div>
         </div>
 
-        {/* Studio Tabs */}
-        <div className="flex items-center gap-1.5 self-start sm:self-auto">
+        {/* Studio Tabs & Actions */}
+        <div className="flex flex-wrap items-center gap-1.5 self-start sm:self-auto">
+          {/* Armor Assembly Trigger Button */}
+          <button
+            type="button"
+            onClick={() => {
+              setIsArmorAssemblyOpen(true);
+              sounds.playSpectrumLoad();
+              haptics.trigger('medium');
+            }}
+            className="px-2.5 py-1 rounded text-xs font-mono font-bold flex items-center gap-1.5 text-white bg-gradient-to-r from-amber-600/80 to-cyan-600/80 hover:from-amber-500 hover:to-cyan-500 border border-amber-400/40 shadow-[0_0_12px_rgba(245,158,11,0.25)] transition-all animate-pulse"
+            title="Open Armor & Weapon Assembly Matrix"
+          >
+            <Shield className="w-3.5 h-3.5 text-amber-300" />
+            <span className="tracking-wide">ARMOR ASSEMBLY</span>
+            <Sparkles className="w-3 h-3 text-cyan-300" />
+          </button>
+
+          {/* 2D / 3D View Mode Switcher */}
+          <div className="flex items-center p-0.5 rounded bg-black/50 border border-white/15">
+            <button
+              type="button"
+              onClick={() => handleSwitchViewMode('2D_MOSAIC')}
+              className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold flex items-center gap-1 transition-all ${
+                viewMode === '2D_MOSAIC'
+                  ? 'bg-cyan-500 text-black shadow-[0_0_8px_rgba(0,240,255,0.4)]'
+                  : 'text-neutral-400 hover:text-white'
+              }`}
+            >
+              <Grid className="w-3 h-3" />
+              <span>2D Matrix</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSwitchViewMode('3D_HOLOGRAM')}
+              className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold flex items-center gap-1 transition-all ${
+                viewMode === '3D_HOLOGRAM'
+                  ? 'bg-gradient-to-r from-cyan-400 to-blue-500 text-black font-extrabold shadow-[0_0_12px_rgba(0,240,255,0.5)]'
+                  : 'text-neutral-400 hover:text-white'
+              }`}
+            >
+              <Box className="w-3 h-3" />
+              <span>3D Hologram</span>
+            </button>
+          </div>
+
           <button
             type="button"
             onClick={() => {
@@ -647,7 +1294,7 @@ export const RomanMosaicMatrixEngine: React.FC<RomanMosaicEngineProps> = ({
             }}
           >
             <Layers className="w-3.5 h-3.5" />
-            <span>Mosaic View</span>
+            <span>Studio</span>
           </button>
           <button
             type="button"
@@ -664,7 +1311,7 @@ export const RomanMosaicMatrixEngine: React.FC<RomanMosaicEngineProps> = ({
             }}
           >
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Draw Studio</span>
+            <span>Draw</span>
           </button>
           <button
             type="button"
@@ -681,7 +1328,7 @@ export const RomanMosaicMatrixEngine: React.FC<RomanMosaicEngineProps> = ({
             }}
           >
             <Binary className="w-3.5 h-3.5" />
-            <span>300/200/150 Cypher</span>
+            <span>Cypher</span>
           </button>
         </div>
       </div>
@@ -691,68 +1338,135 @@ export const RomanMosaicMatrixEngine: React.FC<RomanMosaicEngineProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
           {/* Left Canvas Display */}
           <div className="lg:col-span-8 space-y-3">
-            <div className="relative border border-white/15 rounded-lg overflow-hidden bg-[#050711] flex items-center justify-center min-h-[340px] sm:min-h-[420px]">
-              <canvas
-                ref={canvasRef}
-                width={560}
-                height={420}
-                onMouseDown={handleCanvasMouseDown}
-                onMouseMove={handleCanvasMouseMove}
-                onMouseUp={handleCanvasMouseUp}
-                onMouseLeave={handleCanvasMouseUp}
-                className={`w-full max-w-full h-auto object-contain rounded shadow-2xl transition-all ${
-                  zoomLevel > 1 ? (isPanning ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-crosshair'
-                }`}
-              />
+            <div
+              ref={canvasContainerRef}
+              className="relative border border-white/15 rounded-lg overflow-hidden bg-[#050711] flex items-center justify-center min-h-[340px] sm:min-h-[420px] shadow-2xl"
+            >
+              {viewMode === '2D_MOSAIC' ? (
+                <>
+                  <canvas
+                    ref={canvasRef}
+                    width={560}
+                    height={420}
+                    onMouseDown={handleCanvasMouseDown}
+                    onMouseMove={handleCanvasMouseMove}
+                    onMouseUp={handleCanvasMouseUp}
+                    onMouseLeave={handleCanvasMouseUp}
+                    className={`w-full max-w-full h-auto object-contain rounded shadow-2xl transition-all ${
+                      zoomLevel > 1 ? (isPanning ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-crosshair'
+                    }`}
+                  />
 
-              {/* Hierarchy Overlay Badge */}
-              <div className="absolute top-3 left-3 flex items-center gap-2 bg-black/85 backdrop-blur-md px-2.5 py-1.5 rounded border border-white/15 text-xs font-mono">
-                <span className="w-2 h-2 rounded-full animate-ping" style={{ backgroundColor: theme.primary }} />
-                <span className="font-bold">
-                  {hierarchyLevel === 1 && 'LEVEL 1: 300-SCALE MACRO TESSERAE'}
-                  {hierarchyLevel === 2 && 'LEVEL 2: 200-SCALE MESO INTERPOLATION'}
-                  {hierarchyLevel === 3 && 'LEVEL 3: 150-SCALE QUANTUM TRANSISTORS'}
-                  {hierarchyLevel === 4 && 'LEVEL 4: ULTRA RESOLUTION MAP'}
-                </span>
-                <span className="text-[10px] text-cyan-300 font-bold px-1 py-0.5 rounded bg-cyan-950/60 border border-cyan-500/40">
-                  {zoomLevel}X OPTICAL ZOOM
-                </span>
-              </div>
+                  {/* Hierarchy Overlay Badge */}
+                  <div className="absolute top-3 left-3 flex items-center gap-2 bg-black/85 backdrop-blur-md px-2.5 py-1.5 rounded border border-white/15 text-xs font-mono">
+                    <span className="w-2 h-2 rounded-full animate-ping" style={{ backgroundColor: theme.primary }} />
+                    <span className="font-bold">
+                      {hierarchyLevel === 1 && 'LEVEL 1: 300-SCALE MACRO TESSERAE'}
+                      {hierarchyLevel === 2 && 'LEVEL 2: 200-SCALE MESO INTERPOLATION'}
+                      {hierarchyLevel === 3 && 'LEVEL 3: 150-SCALE QUANTUM TRANSISTORS'}
+                      {hierarchyLevel === 4 && 'LEVEL 4: ULTRA RESOLUTION MAP'}
+                    </span>
+                    <span className="text-[10px] text-cyan-300 font-bold px-1 py-0.5 rounded bg-cyan-950/60 border border-cyan-500/40">
+                      {zoomLevel}X OPTICAL ZOOM
+                    </span>
+                  </div>
 
-              {/* Multi-Level Zoom Quick Floating Toolbar */}
-              <div className="absolute top-3 right-3 flex items-center gap-1 bg-black/85 backdrop-blur-md p-1 rounded-lg border border-white/15 font-mono text-xs z-10 shadow-xl">
-                <button
-                  type="button"
-                  onClick={() => handleZoomChange(-1)}
-                  disabled={zoomLevel <= 1}
-                  className="p-1 rounded bg-white/5 hover:bg-white/15 disabled:opacity-30 text-white transition-all"
-                  title="Zoom Out (Coarser view)"
+                  {/* Multi-Level Zoom Quick Floating Toolbar */}
+                  <div className="absolute top-3 right-3 flex items-center gap-1 bg-black/85 backdrop-blur-md p-1 rounded-lg border border-white/15 font-mono text-xs z-10 shadow-xl">
+                    <button
+                      type="button"
+                      onClick={() => handleZoomChange(-1)}
+                      disabled={zoomLevel <= 1}
+                      className="p-1 rounded bg-white/5 hover:bg-white/15 disabled:opacity-30 text-white transition-all"
+                      title="Zoom Out (Coarser view)"
+                    >
+                      <ZoomOut className="w-3.5 h-3.5" />
+                    </button>
+                    <span className="px-1.5 text-[11px] font-bold text-cyan-300">
+                      {zoomLevel}x
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleZoomChange(1)}
+                      disabled={zoomLevel >= 8}
+                      className="p-1 rounded bg-white/5 hover:bg-white/15 disabled:opacity-30 text-white transition-all"
+                      title="Zoom In (Microscopic sub-pixel resolution)"
+                    >
+                      <ZoomIn className="w-3.5 h-3.5" />
+                    </button>
+                    {zoomLevel > 1 && (
+                      <button
+                        type="button"
+                        onClick={handleResetZoom}
+                        className="px-1.5 py-0.5 rounded bg-red-950/60 hover:bg-red-900 border border-red-500/30 text-[10px] text-red-200 transition-all font-bold"
+                        title="Reset Zoom & Pan"
+                      >
+                        1X
+                      </button>
+                    )}
+                  </div>
+                </>
+              ) : (
+                /* 3D Hologram Viewport */
+                <div
+                  ref={hologramMountRef}
+                  onMouseDown={handle3DPointerDown}
+                  onMouseMove={handle3DPointerMove}
+                  onMouseUp={handle3DPointerUp}
+                  onTouchStart={handle3DPointerDown}
+                  onTouchMove={handle3DPointerMove}
+                  onTouchEnd={handle3DPointerUp}
+                  className="w-full h-[420px] relative cursor-grab active:cursor-grabbing select-none"
                 >
-                  <ZoomOut className="w-3.5 h-3.5" />
-                </button>
-                <span className="px-1.5 text-[11px] font-bold text-cyan-300">
-                  {zoomLevel}x
-                </span>
-                <button
-                  type="button"
-                  onClick={() => handleZoomChange(1)}
-                  disabled={zoomLevel >= 8}
-                  className="p-1 rounded bg-white/5 hover:bg-white/15 disabled:opacity-30 text-white transition-all"
-                  title="Zoom In (Microscopic sub-pixel resolution)"
-                >
-                  <ZoomIn className="w-3.5 h-3.5" />
-                </button>
-                {zoomLevel > 1 && (
-                  <button
-                    type="button"
-                    onClick={handleResetZoom}
-                    className="px-1.5 py-0.5 rounded bg-red-950/60 hover:bg-red-900 border border-red-500/30 text-[10px] text-red-200 transition-all font-bold"
-                    title="Reset Zoom & Pan"
-                  >
-                    1X
-                  </button>
-                )}
-              </div>
+                  {/* Hologram Floating HUD */}
+                  <div className="absolute top-3 left-3 flex flex-wrap items-center gap-2 bg-black/85 backdrop-blur-md px-2.5 py-1.5 rounded border border-cyan-500/30 text-xs font-mono z-10">
+                    <span className="w-2 h-2 rounded-full animate-ping bg-cyan-400" />
+                    <span className="font-bold text-cyan-300">3D HOLOGRAM EXTRUSION</span>
+                    <span className="text-[10px] text-amber-300 font-bold px-1.5 py-0.5 rounded bg-amber-950/60 border border-amber-500/40">
+                      DEPTH: {extrusionDepth}mm
+                    </span>
+                    <span className="text-[10px] text-emerald-300 font-mono">
+                      ALGO: {depthMappingAlgorithm.replace('_', ' ')}
+                    </span>
+                  </div>
+
+                  {/* 3D Controls Toolbar */}
+                  <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-black/85 backdrop-blur-md p-1.5 rounded-lg border border-cyan-500/30 font-mono text-xs z-10 shadow-xl">
+                    <button
+                      type="button"
+                      onClick={handleToggleExplosion}
+                      className={`px-2.5 py-1 rounded text-[11px] font-bold flex items-center gap-1.5 border transition-all ${
+                        isExploded
+                          ? 'bg-amber-500 text-black border-amber-300 shadow-[0_0_10px_rgba(245,158,11,0.5)]'
+                          : 'bg-cyan-950/80 text-cyan-300 border-cyan-500/40 hover:bg-cyan-900'
+                      }`}
+                      title="Trigger GSAP Exploding / Assembling Animation"
+                    >
+                      <Split className="w-3.5 h-3.5" />
+                      <span>{isExploded ? 'Assemble Matrix' : 'Explode Matrix'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setAutoRotate3D(!autoRotate3D)}
+                      className={`p-1.5 rounded border transition-all ${
+                        autoRotate3D
+                          ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50'
+                          : 'bg-white/5 text-neutral-400 border-white/10 hover:text-white'
+                      }`}
+                      title={autoRotate3D ? 'Pause Auto-Rotation' : 'Resume Auto-Rotation'}
+                    >
+                      <Orbit className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {/* 3D Drag Orbit Hint */}
+                  <div className="absolute bottom-3 left-3 bg-black/75 backdrop-blur-md px-2.5 py-1 rounded border border-white/10 text-[10px] font-mono text-neutral-400 flex items-center gap-1.5 pointer-events-none">
+                    <Move className="w-3 h-3 text-cyan-400" />
+                    <span>Click & Drag to Orbit 360° in 3D</span>
+                  </div>
+                </div>
+              )}
 
               {/* Live Vector / Color Similarity Match HUD */}
               <div className="absolute bottom-3 right-3 bg-black/80 backdrop-blur-md px-2.5 py-1.5 rounded border border-white/15 text-xs font-mono flex items-center gap-2">
@@ -763,7 +1477,7 @@ export const RomanMosaicMatrixEngine: React.FC<RomanMosaicEngineProps> = ({
               </div>
             </div>
 
-            {/* Progressive Playback & Fidelity Slider Controls */}
+            {/* Depth Extrusion Slider & Fidelity Controls */}
             <div className="p-3 bg-white/[0.03] border border-white/10 rounded-lg space-y-3">
               {/* Top Slider Header & Stats */}
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -827,13 +1541,14 @@ export const RomanMosaicMatrixEngine: React.FC<RomanMosaicEngineProps> = ({
                   <span className="text-cyan-400 font-bold">◄ 300 (Macro Stone)</span>
                   <span className="text-blue-400 font-bold">200 (Meso Line)</span>
                   <span className="text-purple-400 font-bold">150 (Micro Transistor)</span>
-                  <span className="text-emerald-400 font-bold">50 (Ultra Continuous) ►</span>
+                  <span className="text-emerald-400 font-bold">50 (Ultra)</span>
+                  <span className="text-amber-300 font-bold">25 (HD Micro) ►</span>
                 </div>
 
                 <div className="relative flex items-center">
                   <input
                     type="range"
-                    min={50}
+                    min={20}
                     max={300}
                     step={5}
                     value={fidelityTier}
@@ -844,7 +1559,8 @@ export const RomanMosaicMatrixEngine: React.FC<RomanMosaicEngineProps> = ({
                       if (val >= 260) setHierarchyLevel(1);
                       else if (val >= 180) setHierarchyLevel(2);
                       else if (val >= 100) setHierarchyLevel(3);
-                      else setHierarchyLevel(4);
+                      else if (val >= 40) setHierarchyLevel(4);
+                      else setHierarchyLevel(5);
                       sounds.playClick(500 + (300 - val) * 2);
                       haptics.trigger('light');
                     }}
@@ -853,18 +1569,20 @@ export const RomanMosaicMatrixEngine: React.FC<RomanMosaicEngineProps> = ({
                 </div>
 
                 {/* Quick Snap Preset Buttons */}
-                <div className="grid grid-cols-4 gap-1.5 pt-1">
+                <div className="grid grid-cols-5 gap-1.5 pt-1">
                   {[
-                    { tier: 300, label: '300 MACRO', level: 1, desc: '36px Blocks' },
-                    { tier: 200, label: '200 MESO', level: 2, desc: '18px Tiles' },
-                    { tier: 150, label: '150 MICRO', level: 3, desc: '8px Transistors' },
-                    { tier: 50, label: '50 ULTRA', level: 4, desc: '3px Micro-Matrix' },
+                    { tier: 300, label: '300 MACRO', level: 1, desc: '32px Blocks' },
+                    { tier: 200, label: '200 MESO', level: 2, desc: '16px Tiles' },
+                    { tier: 150, label: '150 MICRO', level: 3, desc: '7px Gates' },
+                    { tier: 50, label: '50 ULTRA', level: 4, desc: '3px Matrix' },
+                    { tier: 25, label: '25 HD MICRO', level: 5, desc: '2px Sub-Pixel' },
                   ].map((preset) => {
                     const isActive =
                       (preset.tier === 300 && fidelityTier >= 260) ||
                       (preset.tier === 200 && fidelityTier >= 180 && fidelityTier < 260) ||
                       (preset.tier === 150 && fidelityTier >= 100 && fidelityTier < 180) ||
-                      (preset.tier === 50 && fidelityTier < 100);
+                      (preset.tier === 50 && fidelityTier >= 40 && fidelityTier < 100) ||
+                      (preset.tier === 25 && fidelityTier < 40);
 
                     return (
                       <button
@@ -877,17 +1595,360 @@ export const RomanMosaicMatrixEngine: React.FC<RomanMosaicEngineProps> = ({
                           sounds.playClick(600 + preset.level * 100);
                           haptics.trigger('medium');
                         }}
-                        className={`px-2 py-1.5 rounded text-xs font-mono font-bold border transition-all text-center ${
+                        className={`px-1.5 py-1.5 rounded text-xs font-mono font-bold border transition-all text-center ${
                           isActive
                             ? 'text-white border-cyan-400 bg-cyan-950/80 shadow-[0_0_12px_rgba(0,240,255,0.3)]'
                             : 'bg-white/5 border-white/10 text-neutral-400 hover:text-white hover:border-white/20'
                         }`}
                       >
-                        <div>{preset.label}</div>
-                        <div className="text-[9px] text-neutral-400 font-normal">{preset.desc}</div>
+                        <div className="truncate">{preset.label}</div>
+                        <div className="text-[9px] text-neutral-400 font-normal truncate">{preset.desc}</div>
                       </button>
                     );
                   })}
+                </div>
+              </div>
+
+              {/* Human-Readable Clarity & Image Refinement Engine Controls */}
+              <div className="p-2.5 bg-cyan-950/25 border border-cyan-500/25 rounded-md space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-mono font-bold text-cyan-300">
+                    <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                    <span className="uppercase">Detail Enhancement & AI Mosaic Upscaler</span>
+                  </div>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-200 border border-cyan-500/30">
+                    CONVOLUTION MATRIX
+                  </span>
+                </div>
+
+                {/* Render Enhancement Mode Switcher: Soft Mosaic vs Sharp Vector vs Detail Enhanced */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px] font-mono">
+                    <span className="text-neutral-300 font-bold">Rendering Mode (64x64 & HD Readability):</span>
+                    <span className="text-cyan-300 font-bold">
+                      {renderEnhanceMode === 'SHARP_VECTOR' && 'SHARP VECTOR [High Frequency Kernel]'}
+                      {renderEnhanceMode === 'SOFT_MOSAIC' && 'SOFT MOSAIC [Gaussian Blur Filter]'}
+                      {renderEnhanceMode === 'DETAIL_ENHANCED' && 'DETAIL ENHANCED [Unsharp 3x3]'}
+                      {renderEnhanceMode === 'HYBRID_TESSERAE' && 'RAW HYBRID TESSERAE'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                    {[
+                      { mode: 'SHARP_VECTOR', label: 'Sharp Vector', desc: 'Crisp 64x64 Contours', icon: Zap },
+                      { mode: 'SOFT_MOSAIC', label: 'Soft Mosaic', desc: 'Smooth Stone Blend', icon: Eye },
+                      { mode: 'DETAIL_ENHANCED', label: 'Detail Enhanced', desc: 'Sharpen Convolution', icon: Sparkles },
+                      { mode: 'HYBRID_TESSERAE', label: 'Raw Tesserae', desc: 'Original Stone Grid', icon: Layers },
+                    ].map(({ mode, label, desc, icon: Icon }) => {
+                      const isActive = renderEnhanceMode === mode;
+                      return (
+                        <button
+                          type="button"
+                          key={mode}
+                          onClick={() => {
+                            setRenderEnhanceMode(mode as any);
+                            sounds.playClick(680);
+                            haptics.trigger('click');
+                          }}
+                          className={`p-1.5 rounded text-left border transition-all ${
+                            isActive
+                              ? 'bg-cyan-500/25 border-cyan-400 text-cyan-100 shadow-[0_0_10px_rgba(0,240,255,0.2)]'
+                              : 'bg-black/40 border-white/10 text-neutral-400 hover:text-neutral-200 hover:bg-white/5'
+                          }`}
+                        >
+                          <div className="flex items-center gap-1.5 text-xs font-mono font-bold">
+                            <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-cyan-400' : 'text-neutral-400'}`} />
+                            <span>{label}</span>
+                          </div>
+                          <div className="text-[9px] font-mono text-neutral-400 mt-0.5 truncate">{desc}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Convolution Sharpen Strength Slider (Active for DETAIL_ENHANCED mode) */}
+                {renderEnhanceMode === 'DETAIL_ENHANCED' && (
+                  <div className="space-y-1 pt-1 bg-black/30 p-2 rounded border border-cyan-500/20">
+                    <div className="flex justify-between text-[11px] font-mono">
+                      <span className="text-neutral-300">Sharpen Convolution Strength:</span>
+                      <span className="text-cyan-300 font-bold">{detailConvolutionStrength}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={10}
+                      max={100}
+                      step={5}
+                      value={detailConvolutionStrength}
+                      onChange={(e) => {
+                        setDetailConvolutionStrength(Number(e.target.value));
+                        sounds.playClick(450 + Number(e.target.value) * 2);
+                      }}
+                      className="w-full h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                    />
+                  </div>
+                )}
+
+                {/* AI Bilinear Upscaling & Noise Reduction Filter Controls */}
+                <div className="p-2 bg-black/40 rounded border border-white/10 space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+                    <label className="flex items-center gap-2 cursor-pointer text-neutral-200 font-bold hover:text-white">
+                      <input
+                        type="checkbox"
+                        checked={enableAiUpscaleFilter}
+                        onChange={(e) => {
+                          setEnableAiUpscaleFilter(e.target.checked);
+                          sounds.playClick(650);
+                          haptics.trigger('light');
+                        }}
+                        className="accent-cyan-400 rounded w-4 h-4"
+                      />
+                      <span className="flex items-center gap-1.5">
+                        <Wand2 className="w-3.5 h-3.5 text-cyan-400" />
+                        AI Bilinear Upscaling & Noise Reduction Filter
+                      </span>
+                    </label>
+
+                    <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${
+                      enableAiUpscaleFilter
+                        ? 'bg-emerald-950/60 text-emerald-300 border-emerald-500/40'
+                        : 'bg-neutral-900 text-neutral-500 border-neutral-700'
+                    }`}>
+                      {enableAiUpscaleFilter ? 'ACTIVE ON HD & ZOOM' : 'DISABLED'}
+                    </span>
+                  </div>
+
+                  {enableAiUpscaleFilter && (
+                    <div className="space-y-1 pt-1">
+                      <div className="flex justify-between text-[11px] font-mono">
+                        <span className="text-neutral-400">Tile Transition Noise Reduction Strength:</span>
+                        <span className="text-emerald-300 font-bold">{noiseReductionStrength}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        step={5}
+                        value={noiseReductionStrength}
+                        onChange={(e) => {
+                          setNoiseReductionStrength(Number(e.target.value));
+                          sounds.playClick(500 + Number(e.target.value) * 2);
+                        }}
+                        className="w-full h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-emerald-400"
+                      />
+                      <div className="flex justify-between text-[9px] font-mono text-neutral-500">
+                        <span>Discrete Tiles (0%)</span>
+                        <span>Balanced Bilateral Smooth (60%)</span>
+                        <span>Ultra Smooth Gradient (100%)</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  {/* Photo Detail Clarity Blend */}
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-[11px] font-mono">
+                      <span className="text-neutral-300">Photo Clarity Detail Blend:</span>
+                      <span className="text-cyan-300 font-bold">{clarityEnhance}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={5}
+                      value={clarityEnhance}
+                      onChange={(e) => {
+                        setClarityEnhance(Number(e.target.value));
+                        sounds.playClick(500 + Number(e.target.value) * 2);
+                      }}
+                      className="w-full h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                    />
+                    <div className="flex justify-between text-[9px] font-mono text-neutral-400">
+                      <span>Pure Mosaic (0%)</span>
+                      <span>Balanced (45%)</span>
+                      <span>Clear Photo (100%)</span>
+                    </div>
+                  </div>
+
+                  {/* Feature Contour & Edge Sharpener */}
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-[11px] font-mono">
+                      <span className="text-neutral-300">Feature Edge Sharpness:</span>
+                      <span className="text-amber-300 font-bold">{edgeSharpness}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={5}
+                      value={edgeSharpness}
+                      onChange={(e) => {
+                        setEdgeSharpness(Number(e.target.value));
+                        sounds.playClick(450 + Number(e.target.value) * 2);
+                      }}
+                      className="w-full h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-amber-400"
+                    />
+                    <div className="flex justify-between text-[9px] font-mono text-neutral-400">
+                      <span>Soft Stone (0%)</span>
+                      <span>Crisp Silhouette (60%)</span>
+                      <span>Razor Edge (100%)</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sub-Pixel & 3D Hologram Resolution Toggles */}
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-white/10 text-xs font-mono">
+                  <label className="flex items-center gap-1.5 cursor-pointer text-neutral-300 hover:text-white">
+                    <input
+                      type="checkbox"
+                      checked={subPixelSampling}
+                      onChange={(e) => {
+                        setSubPixelSampling(e.target.checked);
+                        sounds.playClick(600);
+                        haptics.trigger('light');
+                      }}
+                      className="accent-cyan-400 rounded"
+                    />
+                    <span>Sub-Pixel Area Averaging</span>
+                  </label>
+
+                  <label className="flex items-center gap-1.5 cursor-pointer text-neutral-300 hover:text-white">
+                    <input
+                      type="checkbox"
+                      checked={showContourOutlines}
+                      onChange={(e) => {
+                        setShowContourOutlines(e.target.checked);
+                        sounds.playClick(600);
+                        haptics.trigger('light');
+                      }}
+                      className="accent-cyan-400 rounded"
+                    />
+                    <span>Contour Outlines</span>
+                  </label>
+
+                  {/* 3D Resolution Selector */}
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-neutral-400">3D Density:</span>
+                    {(['ULTRA_HD', 'HIGH', 'TACTICAL'] as const).map((res) => (
+                      <button
+                        type="button"
+                        key={res}
+                        onClick={() => {
+                          setHologramResolution(res);
+                          sounds.playClick(720);
+                          haptics.trigger('click');
+                        }}
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold border transition-all ${
+                          hologramResolution === res
+                            ? 'bg-cyan-500/30 border-cyan-400 text-cyan-200'
+                            : 'bg-white/5 border-white/10 text-neutral-400 hover:text-white'
+                        }`}
+                      >
+                        {res === 'ULTRA_HD' ? 'Ultra HD 64' : res === 'HIGH' ? 'High 48' : 'Tactical 30'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* 3D Hologram Depth Extrusion Slider (Depth-Map Extrusion Control) */}
+              <div className="pt-2 border-t border-white/10 space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-1 text-xs font-mono">
+                  <div className="flex items-center gap-1.5">
+                    <Box className="w-3.5 h-3.5 text-cyan-400" />
+                    <span className="font-bold text-white uppercase">3D Extrusion Depth Map</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-amber-300 font-bold px-1.5 py-0.5 rounded bg-amber-950/70 border border-amber-500/40">
+                      {extrusionDepth} mm / voxels
+                    </span>
+                    {viewMode === '2D_MOSAIC' && (
+                      <button
+                        type="button"
+                        onClick={() => handleSwitchViewMode('3D_HOLOGRAM')}
+                        className="text-[10px] text-cyan-400 hover:text-cyan-200 underline font-bold"
+                      >
+                        Preview 3D Hologram →
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="relative flex items-center">
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={extrusionDepth}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      setExtrusionDepth(val);
+                      sounds.playClick(400 + val * 3);
+                    }}
+                    className="w-full h-2.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-amber-400 shadow-inner"
+                  />
+                </div>
+
+                {/* Depth Presets */}
+                <div className="grid grid-cols-5 gap-1 pt-0.5">
+                  {[
+                    { val: 0, label: 'Flat 0mm' },
+                    { val: 15, label: 'Subtle 15mm' },
+                    { val: 35, label: 'Tactical 35mm' },
+                    { val: 65, label: 'Heavy 65mm' },
+                    { val: 95, label: 'Hyper 95mm' },
+                  ].map((preset) => (
+                    <button
+                      type="button"
+                      key={preset.val}
+                      onClick={() => {
+                        setExtrusionDepth(preset.val);
+                        sounds.playClick(550 + preset.val * 3);
+                        haptics.trigger('light');
+                      }}
+                      className={`px-1.5 py-1 rounded text-[10px] font-mono border transition-all text-center ${
+                        extrusionDepth === preset.val
+                          ? 'bg-amber-500/25 border-amber-400 text-amber-200 font-bold shadow-[0_0_8px_rgba(245,158,11,0.3)]'
+                          : 'bg-white/5 border-white/10 text-neutral-400 hover:text-white'
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Depth Mapping Algorithms */}
+                <div className="pt-1.5 space-y-1">
+                  <div className="text-[10px] font-mono text-neutral-400 uppercase tracking-wider">
+                    Depth-Map Heightfield Algorithm
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1">
+                    {[
+                      { id: 'LUMINANCE_HEIGHTFIELD', label: 'Luminance' },
+                      { id: 'EDGE_NORMAL_GRADIENT', label: 'Edge Relief' },
+                      { id: 'TRANSISTOR_RELIEF', label: 'Transistor Wells' },
+                      { id: 'INVERTED_TRENCH', label: 'Inverted Trench' },
+                    ].map((algo) => (
+                      <button
+                        type="button"
+                        key={algo.id}
+                        onClick={() => {
+                          setDepthMappingAlgorithm(algo.id as any);
+                          sounds.playClick(620);
+                          haptics.trigger('click');
+                        }}
+                        className={`px-2 py-1 rounded text-[10px] font-mono border transition-all truncate ${
+                          depthMappingAlgorithm === algo.id
+                            ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200 font-bold'
+                            : 'bg-white/5 border-white/10 text-neutral-400 hover:text-white'
+                        }`}
+                      >
+                        {algo.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1200,6 +2261,15 @@ export const RomanMosaicMatrixEngine: React.FC<RomanMosaicEngineProps> = ({
           </div>
         </div>
       )}
+
+      {/* Armor & Weapons Tactical Assembly Matrix Modal */}
+      <ArmorAssemblyModal
+        isOpen={isArmorAssemblyOpen}
+        onClose={() => setIsArmorAssemblyOpen(false)}
+        theme={theme}
+        powerOn={powerOn}
+        fluxFrequency={fluxFrequency}
+      />
     </div>
   );
 };

@@ -10,9 +10,22 @@ import {
   ArrowLeft,
   Maximize2,
   Minimize2,
+  Database,
+  Box,
+  Layers,
+  Sparkles,
 } from 'lucide-react';
 import { sounds } from '../../utils/soundEffects';
 import { createLevel4MosaicTexture } from '../../utils/mosaicCharacterRenderer';
+import { InGameModulesAssetOverlay } from './InGameModulesAssetOverlay';
+import {
+  GameModuleAsset,
+  getModulesForGame,
+} from '../../data/gameModulesMetadata';
+import {
+  getEquippedAssetForSlot,
+  createCustomAssetThreeTexture,
+} from '../../utils/customCharacterStore';
 
 interface ThirdPersonTacticalShooterProps {
   powerOn: boolean;
@@ -34,6 +47,23 @@ export const ThirdPersonTacticalShooter3D: React.FC<ThirdPersonTacticalShooterPr
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
   const [wave, setWave] = useState<number>(1);
   const [hostilesLeft, setHostilesLeft] = useState<number>(8);
+  const [modulesOverlayOpen, setModulesOverlayOpen] = useState<boolean>(false);
+  const [activeModules, setActiveModules] = useState<GameModuleAsset[]>(() =>
+    getModulesForGame('TPS').filter((m) => m.isEquipped)
+  );
+
+  const toggleModuleEquip = (moduleId: string) => {
+    setActiveModules((prev) => {
+      const isEq = prev.some((m) => m.id === moduleId);
+      if (isEq) {
+        return prev.filter((m) => m.id !== moduleId);
+      } else {
+        const all = getModulesForGame('TPS');
+        const found = all.find((m) => m.id === moduleId);
+        return found ? [...prev, found] : prev;
+      }
+    });
+  };
 
   const gameRef = useRef<{
     scene: THREE.Scene;
@@ -136,9 +166,49 @@ export const ThirdPersonTacticalShooter3D: React.FC<ThirdPersonTacticalShooterPr
     grid.position.y = 0.02;
     scene.add(grid);
 
-    // Tactical Cover Blocks
+    // Tactical Cover Blocks with Hand-Drawn Roman Cyber Mosaic Murals
     const coverGeo = new THREE.BoxGeometry(4, 2.5, 2);
     const coverMat = new THREE.MeshStandardMaterial({ color: 0x1c2438, roughness: 0.4, metalness: 0.8 });
+
+    // Generate Hand-Drawn Mosaic Murals for Tactical Barriers
+    const tpsMuralMosaic1 = createLevel4MosaicTexture('ROMAN_CYBER_MOSAIC', {
+      tileSize: 3,
+      tileStyle: 'ROMAN_STONE',
+      primaryGlow: '#00f0ff',
+      groutIntensity: 40,
+    });
+    const tpsMuralMosaic2 = createLevel4MosaicTexture('VALKYRIE_GUNDAM', {
+      tileSize: 3,
+      tileStyle: 'ROMAN_STONE',
+      primaryGlow: '#ffaa00',
+      groutIntensity: 40,
+    });
+    const tpsMuralMosaic3 = createLevel4MosaicTexture('MECH_ARMOR', {
+      tileSize: 3,
+      tileStyle: 'QUANTUM_TRANSISTOR',
+      primaryGlow: '#00ffff',
+      groutIntensity: 35,
+    });
+
+    const tpsMuralMat1 = new THREE.MeshStandardMaterial({
+      map: tpsMuralMosaic1,
+      metalness: 0.75,
+      roughness: 0.28,
+      side: THREE.DoubleSide,
+    });
+    const tpsMuralMat2 = new THREE.MeshStandardMaterial({
+      map: tpsMuralMosaic2,
+      metalness: 0.75,
+      roughness: 0.28,
+      side: THREE.DoubleSide,
+    });
+    const tpsMuralMat3 = new THREE.MeshStandardMaterial({
+      map: tpsMuralMosaic3,
+      metalness: 0.75,
+      roughness: 0.28,
+      side: THREE.DoubleSide,
+    });
+
     for (let i = 0; i < 16; i++) {
       const cover = new THREE.Mesh(coverGeo, coverMat);
       const angle = (i / 16) * Math.PI * 2;
@@ -146,6 +216,14 @@ export const ThirdPersonTacticalShooter3D: React.FC<ThirdPersonTacticalShooterPr
       cover.position.set(Math.cos(angle) * r, 1.25, Math.sin(angle) * r);
       cover.rotation.y = angle + Math.PI / 4;
       scene.add(cover);
+
+      // Add Roman Cyber Mosaic Plaque on tactical cover
+      const muralMat = i % 3 === 0 ? tpsMuralMat1 : i % 3 === 1 ? tpsMuralMat2 : tpsMuralMat3;
+      const muralPlaque = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 2.1), muralMat);
+      muralPlaque.position.set(Math.cos(angle) * r, 1.25, Math.sin(angle) * r);
+      muralPlaque.rotation.y = angle + Math.PI / 4;
+      muralPlaque.translateZ(1.02);
+      scene.add(muralPlaque);
     }
 
     // Shared Pre-Allocated Geometries & Materials
@@ -163,16 +241,21 @@ export const ThirdPersonTacticalShooter3D: React.FC<ThirdPersonTacticalShooterPr
     const beamMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.6 });
 
     // Generate High-Fidelity Level 4 Roman Mosaic & Quantum Transistor Textures
-    const heroMosaicFront = createLevel4MosaicTexture('HERO_MECH_FRONT', {
-      tileSize: 3,
-      tileStyle: 'ROMAN_STONE',
-      groutIntensity: 50,
-    });
-    const heroMosaicBack = createLevel4MosaicTexture('HERO_MECH_BACK', {
-      tileSize: 3,
-      tileStyle: 'ROMAN_STONE',
-      groutIntensity: 50,
-    });
+    const equippedMechAsset = getEquippedAssetForSlot('TPS_MECH');
+    const heroMosaicFront = equippedMechAsset
+      ? createCustomAssetThreeTexture(equippedMechAsset)
+      : createLevel4MosaicTexture('HERO_MECH_FRONT', {
+          tileSize: 3,
+          tileStyle: 'ROMAN_STONE',
+          groutIntensity: 50,
+        });
+    const heroMosaicBack = equippedMechAsset
+      ? createCustomAssetThreeTexture(equippedMechAsset)
+      : createLevel4MosaicTexture('HERO_MECH_BACK', {
+          tileSize: 3,
+          tileStyle: 'ROMAN_STONE',
+          groutIntensity: 50,
+        });
     const goliathMosaic = createLevel4MosaicTexture('GOLIATH_TITAN', {
       tileSize: 3,
       tileStyle: 'ROMAN_STONE',
@@ -358,6 +441,10 @@ export const ThirdPersonTacticalShooter3D: React.FC<ThirdPersonTacticalShooterPr
         if (e.code === 'KeyE') handleDeployBarrier();
         if (e.code === 'KeyQ') handleDash();
         if (e.code === 'KeyR') handleOrbitalStrike();
+        if (e.code === 'KeyM') {
+          setModulesOverlayOpen((prev) => !prev);
+          sounds.playClick(700);
+        }
         if (e.code === 'Space') gameRef.current.isShooting = true;
       }
     };
@@ -833,6 +920,26 @@ export const ThirdPersonTacticalShooter3D: React.FC<ThirdPersonTacticalShooterPr
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2 pointer-events-auto">
+          {/* Tactical 2D/3D Modules Asset Deck Button */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              setModulesOverlayOpen(true);
+              sounds.playClick(750);
+            }}
+            className="px-2.5 py-1 bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-400 text-cyan-300 rounded font-bold text-[10px] sm:text-[11px] flex items-center gap-1.5 shadow-[0_0_12px_rgba(0,240,255,0.3)] active:scale-95 transition-all"
+            title="Open 2D/3D Tactical Modules Deck (M)"
+          >
+            <Database className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+            <span className="hidden sm:inline">MODULES [M]</span>
+            <span className="sm:hidden">MODS</span>
+            <span className="px-1 py-0.2 rounded bg-cyan-400/20 text-[9px] text-cyan-200">
+              {activeModules.length}
+            </span>
+          </button>
+
           {/* Fullscreen Expand Toggle */}
           <button
             type="button"
@@ -1071,6 +1178,15 @@ export const ThirdPersonTacticalShooter3D: React.FC<ThirdPersonTacticalShooterPr
           )}
         </div>
       )}
+
+      {/* 2D First, then 3D Tactical In-Game Modules & Asset Deck Overlay */}
+      <InGameModulesAssetOverlay
+        isOpen={modulesOverlayOpen}
+        onClose={() => setModulesOverlayOpen(false)}
+        gameMode="TPS"
+        activeModules={activeModules}
+        onToggleModuleEquip={toggleModuleEquip}
+      />
     </div>
   );
 };

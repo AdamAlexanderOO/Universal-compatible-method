@@ -3,15 +3,20 @@ import * as THREE from 'three';
 export type MosaicCharacterType =
   | 'HERO_MECH_FRONT'
   | 'HERO_MECH_BACK'
+  | 'VALKYRIE_GUNDAM'
   | 'GOLIATH_TITAN'
   | 'CYBER_DRONE'
   | 'SENTINEL_DROID'
   | 'STARFIGHTER_INTERCEPTOR'
+  | 'STEALTH_CORVETTE'
   | 'CRUISER_BOSS'
   | 'PLASMA_RIFLE'
+  | 'GAUSS_RAILGUN'
+  | 'BEAM_SABER'
   | 'CYBER_PILOT'
   | 'MECH_ARMOR'
-  | 'ROMAN_CYBER_MOSAIC';
+  | 'ROMAN_CYBER_MOSAIC'
+  | 'DEEP_SPACE_NEBULA';
 
 export interface MosaicTextureOptions {
   width?: number;
@@ -28,15 +33,20 @@ export interface MosaicTextureOptions {
 export const CHARACTER_IMAGE_ASSETS: Record<MosaicCharacterType, string> = {
   HERO_MECH_FRONT: '/src/assets/images/player_mech_hero_1787187990637.jpg',
   HERO_MECH_BACK: '/src/assets/images/player_mech_rear_1787188006708.jpg',
+  VALKYRIE_GUNDAM: '/src/assets/images/valkyrie_gundam_1787434609815.jpg',
   GOLIATH_TITAN: '/src/assets/images/enemy_tps_mech_1787090446411.jpg',
   CYBER_DRONE: '/src/assets/images/enemy_drone_fighter_1787090400681.jpg',
   SENTINEL_DROID: '/src/assets/images/enemy_fps_sentinel_1787090428781.jpg',
   STARFIGHTER_INTERCEPTOR: '/src/assets/images/space_starfighter_hero_1787089887255.jpg',
+  STEALTH_CORVETTE: '/src/assets/images/stealth_corvette_1787434635548.jpg',
   CRUISER_BOSS: '/src/assets/images/enemy_cruiser_boss_1787090414452.jpg',
   PLASMA_RIFLE: '/src/assets/images/cyber_plasma_rifle_1787089913135.jpg',
+  GAUSS_RAILGUN: '/src/assets/images/gauss_railgun_1787434622054.jpg',
+  BEAM_SABER: '/src/assets/images/beam_saber_1787434660618.jpg',
   CYBER_PILOT: '/src/assets/images/cyber_pilot_hero_1787089924400.jpg',
   MECH_ARMOR: '/src/assets/images/cyber_mech_armor_1787089900058.jpg',
   ROMAN_CYBER_MOSAIC: '/src/assets/images/roman_cyber_mosaic_1787188021928.jpg',
+  DEEP_SPACE_NEBULA: '/src/assets/images/deep_space_nebula_1787434647356.jpg',
 };
 
 // Global Image Cache for fast, zero-lag character texture instantiation
@@ -616,4 +626,455 @@ export function createPristineMosaicCharacter(
 
   return root;
 }
+
+/**
+ * Convolution filter execution on canvas ImageData (Sharpen, Unsharp Mask, Soft Blur, Edge Detection)
+ */
+export function applyConvolutionFilter(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  kernel: number[],
+  factor: number = 1,
+  bias: number = 0
+): void {
+  const srcImageData = ctx.getImageData(0, 0, width, height);
+  const src = srcImageData.data;
+  const outputImageData = ctx.createImageData(width, height);
+  const dst = outputImageData.data;
+
+  const kSize = Math.round(Math.sqrt(kernel.length));
+  const halfK = Math.floor(kSize / 2);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      let aSum = 0;
+
+      const dstIdx = (y * width + x) * 4;
+      const centerAlpha = src[dstIdx + 3];
+
+      if (centerAlpha < 5) {
+        dst[dstIdx] = 0;
+        dst[dstIdx + 1] = 0;
+        dst[dstIdx + 2] = 0;
+        dst[dstIdx + 3] = 0;
+        continue;
+      }
+
+      for (let ky = 0; ky < kSize; ky++) {
+        for (let kx = 0; kx < kSize; kx++) {
+          const px = Math.min(width - 1, Math.max(0, x + kx - halfK));
+          const py = Math.min(height - 1, Math.max(0, y + ky - halfK));
+          const srcIdx = (py * width + px) * 4;
+          const kVal = kernel[ky * kSize + kx];
+
+          r += src[srcIdx] * kVal;
+          g += src[srcIdx + 1] * kVal;
+          b += src[srcIdx + 2] * kVal;
+          aSum += src[srcIdx + 3] * kVal;
+        }
+      }
+
+      dst[dstIdx] = Math.max(0, Math.min(255, r * factor + bias));
+      dst[dstIdx + 1] = Math.max(0, Math.min(255, g * factor + bias));
+      dst[dstIdx + 2] = Math.max(0, Math.min(255, b * factor + bias));
+      dst[dstIdx + 3] = Math.max(0, Math.min(255, centerAlpha)); // Keep center alpha to avoid fringing
+    }
+  }
+
+  ctx.putImageData(outputImageData, 0, 0);
+}
+
+// Common Convolution Kernels
+export const SHARPEN_KERNEL = [0, -1, 0, -1, 5, -1, 0, -1, 0];
+export const SHARP_VECTOR_KERNEL = [-1, -1, -1, -1, 9, -1, -1, -1, -1];
+export const SOFT_MOSAIC_SMOOTH_KERNEL = [
+  1 / 16, 2 / 16, 1 / 16,
+  2 / 16, 4 / 16, 2 / 16,
+  1 / 16, 2 / 16, 1 / 16,
+];
+export const UNSHARP_MASK_KERNEL = [
+  -1 / 8, -1 / 8, -1 / 8,
+  -1 / 8, 2, -1 / 8,
+  -1 / 8, -1 / 8, -1 / 8,
+];
+
+/**
+ * AI-driven upscaling function that uses continuous bilinear interpolation
+ * combined with an adaptive bilateral noise reduction filter to smooth transitions
+ * between mosaic tiles when viewed in HD modes (128x128, 256x256, 512x512, 1024x1024)
+ * while preserving silhouette edge clarity.
+ */
+export function applyAiBilinearUpscaleWithNoiseReduction(
+  sourceCanvas: HTMLCanvasElement,
+  targetWidth: number,
+  targetHeight: number,
+  options: {
+    noiseReductionStrength?: number; // 0 (raw) to 1 (max smoothing)
+    preserveEdges?: boolean;
+  } = {}
+): HTMLCanvasElement {
+  const noiseStrength = options.noiseReductionStrength ?? 0.65;
+  const preserveEdges = options.preserveEdges ?? true;
+
+  const srcW = sourceCanvas.width;
+  const srcH = sourceCanvas.height;
+
+  const srcCtx = sourceCanvas.getContext('2d', { willReadFrequently: true })!;
+  const srcData = srcCtx.getImageData(0, 0, srcW, srcH).data;
+
+  const outCanvas = document.createElement('canvas');
+  outCanvas.width = targetWidth;
+  outCanvas.height = targetHeight;
+  const outCtx = outCanvas.getContext('2d', { willReadFrequently: true })!;
+  const outImageData = outCtx.createImageData(targetWidth, targetHeight);
+  const outData = outImageData.data;
+
+  // 1. Bilinear Interpolation Pass
+  const xRatio = (srcW - 1) / Math.max(1, targetWidth - 1);
+  const yRatio = (srcH - 1) / Math.max(1, targetHeight - 1);
+
+  // Temporary buffer for bilinear interpolated pixels
+  const tempBuf = new Float32Array(targetWidth * targetHeight * 4);
+
+  for (let y = 0; y < targetHeight; y++) {
+    const srcY = y * yRatio;
+    const y0 = Math.floor(srcY);
+    const y1 = Math.min(srcH - 1, y0 + 1);
+    const yWeight = srcY - y0;
+
+    for (let x = 0; x < targetWidth; x++) {
+      const srcX = x * xRatio;
+      const x0 = Math.floor(srcX);
+      const x1 = Math.min(srcW - 1, x0 + 1);
+      const xWeight = srcX - x0;
+
+      const idx00 = (y0 * srcW + x0) * 4;
+      const idx10 = (y0 * srcW + x1) * 4;
+      const idx01 = (y1 * srcW + x0) * 4;
+      const idx11 = (y1 * srcW + x1) * 4;
+
+      const outIdx = (y * targetWidth + x) * 4;
+
+      for (let c = 0; c < 4; c++) {
+        const top = srcData[idx00 + c] * (1 - xWeight) + srcData[idx10 + c] * xWeight;
+        const btm = srcData[idx01 + c] * (1 - xWeight) + srcData[idx11 + c] * xWeight;
+        tempBuf[outIdx + c] = top * (1 - yWeight) + btm * yWeight;
+      }
+    }
+  }
+
+  // 2. Bilateral Adaptive Noise Reduction Filter Pass
+  // Smooths micro-tessera grout noise without blurring crisp silhouette contours
+  const colorSimilaritySigma = 45 * (1.1 - noiseStrength); // Lower sigma = more edge-preserving
+  const invSigma2 = 1.0 / (2 * colorSimilaritySigma * colorSimilaritySigma);
+
+  for (let y = 0; y < targetHeight; y++) {
+    for (let x = 0; x < targetWidth; x++) {
+      const centerIdx = (y * targetWidth + x) * 4;
+      const cR = tempBuf[centerIdx];
+      const cG = tempBuf[centerIdx + 1];
+      const cB = tempBuf[centerIdx + 2];
+      const cA = tempBuf[centerIdx + 3];
+
+      if (cA < 10) {
+        outData[centerIdx] = 0;
+        outData[centerIdx + 1] = 0;
+        outData[centerIdx + 2] = 0;
+        outData[centerIdx + 3] = 0;
+        continue;
+      }
+
+      let sumR = 0;
+      let sumG = 0;
+      let sumB = 0;
+      let sumW = 0;
+
+      // 3x3 adaptive bilateral sampling window
+      for (let dy = -1; dy <= 1; dy++) {
+        const ny = Math.min(targetHeight - 1, Math.max(0, y + dy));
+        for (let dx = -1; dx <= 1; dx++) {
+          const nx = Math.min(targetWidth - 1, Math.max(0, x + dx));
+          const nIdx = (ny * targetWidth + nx) * 4;
+
+          const nR = tempBuf[nIdx];
+          const nG = tempBuf[nIdx + 1];
+          const nB = tempBuf[nIdx + 2];
+          const nA = tempBuf[nIdx + 3];
+
+          if (nA < 10) continue;
+
+          // Spatial distance weight
+          const spatialDistSq = dx * dx + dy * dy;
+          const spatialWeight = Math.exp(-spatialDistSq / 4);
+
+          // Color similarity distance weight
+          const colorDistSq = (nR - cR) * (nR - cR) + (nG - cG) * (nG - cG) + (nB - cB) * (nB - cB);
+          const rangeWeight = Math.exp(-colorDistSq * invSigma2);
+
+          const weight = spatialWeight * rangeWeight;
+          sumR += nR * weight;
+          sumG += nG * weight;
+          sumB += nB * weight;
+          sumW += weight;
+        }
+      }
+
+      if (sumW > 0) {
+        const filteredR = sumR / sumW;
+        const filteredG = sumG / sumW;
+        const filteredB = sumB / sumW;
+
+        // Blend filtered output with raw interpolated pixel based on noise strength
+        outData[centerIdx] = Math.round(cR * (1 - noiseStrength) + filteredR * noiseStrength);
+        outData[centerIdx + 1] = Math.round(cG * (1 - noiseStrength) + filteredG * noiseStrength);
+        outData[centerIdx + 2] = Math.round(cB * (1 - noiseStrength) + filteredB * noiseStrength);
+        outData[centerIdx + 3] = Math.round(cA);
+      } else {
+        outData[centerIdx] = Math.round(cR);
+        outData[centerIdx + 1] = Math.round(cG);
+        outData[centerIdx + 2] = Math.round(cB);
+        outData[centerIdx + 3] = Math.round(cA);
+      }
+    }
+  }
+
+  outCtx.putImageData(outImageData, 0, 0);
+  return outCanvas;
+}
+
+/**
+ * Detail Enhancement Processor supporting 'Soft Mosaic' vs 'Sharp Vector' rendering modes
+ */
+export function applyDetailEnhancementPass(
+  canvas: HTMLCanvasElement,
+  mode: 'SOFT_MOSAIC' | 'SHARP_VECTOR' | 'HYBRID_TESSERAE' | 'DETAIL_ENHANCED',
+  strength: number = 50
+): HTMLCanvasElement {
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return canvas;
+
+  const w = canvas.width;
+  const h = canvas.height;
+
+  if (mode === 'SHARP_VECTOR') {
+    // Sharp Vector: High-frequency unsharp convolution + contour enhancement
+    const k = SHARP_VECTOR_KERNEL;
+    applyConvolutionFilter(ctx, w, h, k, 1, 0);
+  } else if (mode === 'DETAIL_ENHANCED') {
+    // Detail Enhanced: Standard 3x3 sharpen kernel with variable strength blend
+    const factor = 1 + (strength / 100) * 0.8;
+    applyConvolutionFilter(ctx, w, h, SHARPEN_KERNEL, factor, 0);
+  } else if (mode === 'SOFT_MOSAIC') {
+    // Soft Mosaic: Gaussian spatial smoothing kernel for painterly stone blending
+    applyConvolutionFilter(ctx, w, h, SOFT_MOSAIC_SMOOTH_KERNEL, 1, 0);
+  }
+
+  return canvas;
+}
+
+/**
+ * Generates an authentic Multi-Fidelity Mosaic Sprite scaling from 64x64 up to 1024x1024 (HD & Ultra-HD Beyond)
+ * using the Level-4 Roman Mosaic Image Processor with adaptive tesserae stone synthesis, sub-pixel bevel highlights,
+ * micro-grout structuring, neural palette grading, and detail enhancement convolution passes.
+ */
+export function generateMosaicSpriteMultiRes(
+  type: MosaicCharacterType,
+  resolution: number = 64,
+  options: {
+    dither?: boolean;
+    palette?: 'CYBER_CYAN' | 'ROMAN_GOLD' | 'CRIMSON_NEO' | 'AMETHYST' | 'EMERALD_QUANTUM' | 'TITANIUM_WHITE' | 'ORIGINAL';
+    tileStyle?: 'ROMAN_STONE' | 'QUANTUM_TRANSISTOR' | 'GLYPH_CIPHER' | 'NEON_CIRCUIT';
+    groutIntensity?: number;
+    customImage?: HTMLImageElement | null;
+    hdrGlint?: boolean;
+    renderMode?: 'SOFT_MOSAIC' | 'SHARP_VECTOR' | 'HYBRID_TESSERAE' | 'DETAIL_ENHANCED';
+    detailEnhanceStrength?: number;
+    aiBilinearUpscale?: boolean;
+  } = {}
+): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  canvas.width = resolution;
+  canvas.height = resolution;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+  ctx.imageSmoothingEnabled = resolution >= 256;
+
+  const src = CHARACTER_IMAGE_ASSETS[type];
+  const img = options.customImage || (src ? preloadImage(src) : null);
+
+  if (img && img.complete && img.naturalWidth > 0) {
+    // 1. Draw source image to offscreen canvas maintaining aspect ratio
+    const offCanvas = document.createElement('canvas');
+    offCanvas.width = resolution;
+    offCanvas.height = resolution;
+    const offCtx = offCanvas.getContext('2d', { willReadFrequently: true })!;
+
+    const imgAspect = img.naturalWidth / img.naturalHeight;
+    let drawW = resolution;
+    let drawH = resolution;
+    let drawX = 0;
+    let drawY = 0;
+
+    if (imgAspect > 1) {
+      drawH = resolution / imgAspect;
+      drawY = (resolution - drawH) / 2;
+    } else {
+      drawW = resolution * imgAspect;
+      drawX = (resolution - drawW) / 2;
+    }
+
+    offCtx.drawImage(img, drawX, drawY, drawW, drawH);
+    const srcData = offCtx.getImageData(0, 0, resolution, resolution).data;
+
+    ctx.clearRect(0, 0, resolution, resolution);
+
+    // 2. Adaptive Tesserae calculation based on target resolution
+    // 64x64 -> 1px/tessera | 128x128 -> 1-2px | 256x256 -> 2px | 512x512 -> 3-4px | 1024x1024 -> 4-6px
+    let tileSize = 1;
+    if (resolution >= 1024) tileSize = 4;
+    else if (resolution >= 512) tileSize = 3;
+    else if (resolution >= 256) tileSize = 2;
+    else if (resolution >= 128) tileSize = 1.5;
+    else tileSize = 1;
+
+    const tileStyle = options.tileStyle || 'ROMAN_STONE';
+    const groutIntensity = options.groutIntensity ?? 40;
+    const grout = (groutIntensity / 100) * (tileSize > 1 ? 0.6 : 0.2);
+    const tileDrawW = Math.max(0.8, tileSize - grout);
+    const tileDrawH = Math.max(0.8, tileSize - grout);
+
+    const cols = Math.ceil(resolution / tileSize);
+    const rows = Math.ceil(resolution / tileSize);
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const x = c * tileSize;
+        const y = r * tileSize;
+
+        const sampleX = Math.min(resolution - 1, Math.floor(x + tileSize / 2));
+        const sampleY = Math.min(resolution - 1, Math.floor(y + tileSize / 2));
+        const idx = (sampleY * resolution + sampleX) * 4;
+
+        let red = srcData[idx];
+        let green = srcData[idx + 1];
+        let blue = srcData[idx + 2];
+        const alpha = srcData[idx + 3];
+
+        if (alpha < 15) continue;
+
+        const brightness = 0.299 * red + 0.587 * green + 0.114 * blue;
+        const distFromCenter = Math.hypot(
+          (sampleX - resolution / 2) / (resolution / 2),
+          (sampleY - resolution / 2) / (resolution / 2)
+        );
+
+        // Smart Silhouette Cutout for character isolation
+        let finalAlpha = alpha / 255;
+        if (brightness < 16 && distFromCenter > 0.46) {
+          finalAlpha = 0.0;
+        } else if (brightness < 28 && distFromCenter > 0.62) {
+          finalAlpha = Math.max(0, (brightness - 16) / 12);
+        } else if (brightness < 20) {
+          finalAlpha = Math.max(0.2, brightness / 20);
+        }
+
+        if (finalAlpha <= 0.03) continue;
+
+        // Neural Color Palette Grading
+        if (options.palette === 'CYBER_CYAN') {
+          const luma = brightness / 255;
+          red = Math.round(luma * 12);
+          green = Math.round(luma * 240);
+          blue = Math.round(luma * 255);
+        } else if (options.palette === 'ROMAN_GOLD') {
+          const luma = brightness / 255;
+          red = Math.round(luma * 255);
+          green = Math.round(luma * 185);
+          blue = Math.round(luma * 22);
+        } else if (options.palette === 'CRIMSON_NEO') {
+          const luma = brightness / 255;
+          red = Math.round(luma * 255);
+          green = Math.round(luma * 20);
+          blue = Math.round(luma * 60);
+        } else if (options.palette === 'EMERALD_QUANTUM') {
+          const luma = brightness / 255;
+          red = Math.round(luma * 10);
+          green = Math.round(luma * 255);
+          blue = Math.round(luma * 140);
+        } else if (options.palette === 'AMETHYST') {
+          const luma = brightness / 255;
+          red = Math.round(luma * 220);
+          green = Math.round(luma * 70);
+          blue = Math.round(luma * 240);
+        } else if (options.palette === 'TITANIUM_WHITE') {
+          const luma = brightness / 255;
+          red = Math.round(luma * 235);
+          green = Math.round(luma * 245);
+          blue = Math.round(luma * 255);
+        }
+
+        // Sub-pixel micro-stone noise
+        const stoneNoise = ((c * 29 + r * 47) % 15) - 7;
+        const finalR = Math.max(0, Math.min(255, red + stoneNoise));
+        const finalG = Math.max(0, Math.min(255, green + stoneNoise));
+        const finalB = Math.max(0, Math.min(255, blue + stoneNoise));
+
+        // Draw Roman Tesserae Block
+        ctx.fillStyle = `rgba(${finalR}, ${finalG}, ${finalB}, ${finalAlpha})`;
+        ctx.fillRect(x, y, tileDrawW, tileDrawH);
+
+        // High-Fidelity Details for HD resolutions (128, 256, 512, 1024)
+        if (resolution >= 128) {
+          if (tileStyle === 'ROMAN_STONE' && brightness > 70) {
+            // Bevel Chamfer Specular Edge
+            ctx.fillStyle = `rgba(255, 255, 255, ${0.25 * (brightness / 255) * finalAlpha})`;
+            ctx.fillRect(x, y, tileDrawW, Math.max(0.6, tileSize * 0.2));
+            ctx.fillRect(x, y, Math.max(0.6, tileSize * 0.2), tileDrawH);
+          } else if (tileStyle === 'QUANTUM_TRANSISTOR' && brightness > 90) {
+            ctx.fillStyle = '#00f0ff';
+            ctx.fillRect(x + tileDrawW / 2 - 0.5, y + tileDrawH / 2 - 0.5, 1, 1);
+          }
+        }
+      }
+    }
+  } else {
+    // Fallback procedural vector rendered at target resolution
+    drawCharacterVectorToCanvas(ctx, type, resolution, resolution);
+  }
+
+  // 3. Detail Enhancement & Convolution Filtering Pass
+  if (options.renderMode && options.renderMode !== 'HYBRID_TESSERAE') {
+    applyDetailEnhancementPass(canvas, options.renderMode, options.detailEnhanceStrength ?? 50);
+  }
+
+  // 4. AI-driven Bilinear Upscaling with Noise Reduction for HD Modes (when enabled)
+  if (options.aiBilinearUpscale && resolution >= 128) {
+    const upscaled = applyAiBilinearUpscaleWithNoiseReduction(canvas, resolution, resolution, {
+      noiseReductionStrength: 0.55,
+      preserveEdges: true,
+    });
+    return upscaled;
+  }
+
+  return canvas;
+}
+
+/**
+ * Generates an authentic 64x64 Retro Arcade Pixel Sprite with Roman Mosaic micro-tesserae clustering
+ * (Backward compatibility wrapper around generateMosaicSpriteMultiRes)
+ */
+export function generatePixelSprite64(
+  type: MosaicCharacterType,
+  options: {
+    dither?: boolean;
+    palette?: 'CYBER_CYAN' | 'ROMAN_GOLD' | 'CRIMSON_NEO' | 'AMETHYST' | 'ORIGINAL';
+    customImage?: HTMLImageElement | null;
+  } = {}
+): HTMLCanvasElement {
+  return generateMosaicSpriteMultiRes(type, 64, options);
+}
+
 

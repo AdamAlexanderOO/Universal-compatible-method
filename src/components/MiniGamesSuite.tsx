@@ -29,15 +29,21 @@ import { haptics } from '../utils/haptics';
 import { SpaceDogfightSim3D } from './games/SpaceDogfightSim3D';
 import { CyberFpsShooter3D } from './games/CyberFpsShooter3D';
 import { ThirdPersonTacticalShooter3D } from './games/ThirdPersonTacticalShooter3D';
+import { PixelArcade64x64 } from './games/PixelArcade64x64';
 
 // Images generated for space sim, armor, weapon, and character
 const ASSET_STARFIGHTER = '/src/assets/images/space_starfighter_hero_1787089887255.jpg';
+const ASSET_STEALTH_CORVETTE = '/src/assets/images/stealth_corvette_1787434635548.jpg';
+const ASSET_VALKYRIE_GUNDAM = '/src/assets/images/valkyrie_gundam_1787434609815.jpg';
 const ASSET_MECH_ARMOR = '/src/assets/images/cyber_mech_armor_1787089900058.jpg';
 const ASSET_PLASMA_RIFLE = '/src/assets/images/cyber_plasma_rifle_1787089913135.jpg';
+const ASSET_GAUSS_RAILGUN = '/src/assets/images/gauss_railgun_1787434622054.jpg';
+const ASSET_BEAM_SABER = '/src/assets/images/beam_saber_1787434660618.jpg';
 const ASSET_PILOT_HERO = '/src/assets/images/cyber_pilot_hero_1787089924400.jpg';
 
 type GameMode =
   | 'SPACE_SIM_3D'
+  | 'PIXEL_ARCADE_64'
   | 'CYBER_FPS_3D'
   | 'TACTICAL_TPS_3D'
   | 'ARSENAL_LOADOUT'
@@ -160,6 +166,24 @@ export const MiniGamesSuite: React.FC<{
           >
             <Rocket className="w-3.5 h-3.5" />
             <span>3D Space Sim</span>
+          </button>
+
+          {/* 64x64 Retro Pixel Arcade Button */}
+          <button
+            type="button"
+            onClick={() => {
+              sounds.playClick(630);
+              haptics.trigger('medium');
+              setActiveGame('PIXEL_ARCADE_64');
+            }}
+            className={`px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider rounded transition-all flex items-center gap-1.5 ${
+              activeGame === 'PIXEL_ARCADE_64'
+                ? 'bg-amber-600 text-white shadow-[0_0_14px_rgba(245,158,11,0.6)] border border-amber-400'
+                : 'text-amber-300 hover:text-white bg-amber-950/40 border border-amber-500/30'
+            }`}
+          >
+            <Gamepad2 className="w-3.5 h-3.5 text-amber-400" />
+            <span>64x64 Pixel Arcade</span>
           </button>
 
           <button
@@ -306,6 +330,13 @@ export const MiniGamesSuite: React.FC<{
               powerOn={powerOn}
               fluxFrequency={fluxFrequency}
               onExitToMenu={handleReturnToConsole}
+              onSwitchToPixelArcade={() => setActiveGame('PIXEL_ARCADE_64')}
+            />
+          )}
+          {activeGame === 'PIXEL_ARCADE_64' && (
+            <PixelArcade64x64
+              onSwitchTo3D={() => setActiveGame('SPACE_SIM_3D')}
+              onClose={handleReturnToConsole}
             />
           )}
           {activeGame === 'CYBER_FPS_3D' && (

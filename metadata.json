@@ -1,6 +1,6 @@
 {
   "name": "Aurora Cyber-Deck: Holographic Bio-Mechanical Simulation Engine",
-  "description": "An integrated tactical cyber-deck combining 3D Space Dogfight Simulation, 1st & 3rd person cyber action shooters, the Aurora Machine hardware console, Light-Protocol PCB neural routing, holographic gear matrix, and real-time HUD telemetry with an interactive Gemini AI Core.",
+  "description": "An integrated tactical cyber-deck combining 3D Space Dogfight Simulation, 1st & 3rd person cyber action shooters, 64x64 Retro Pixel Arcade, customizable 3D holographic color schemes, Roman Mosaic Metallurgy, and custom image-to-character asset conversion studio.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

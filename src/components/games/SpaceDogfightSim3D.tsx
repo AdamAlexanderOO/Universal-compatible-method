@@ -19,19 +19,33 @@ import {
   Activity,
   Info,
   X,
+  Gamepad2,
+  Database,
+  Box,
 } from 'lucide-react';
 import { sounds } from '../../utils/soundEffects';
 import { createLevel4MosaicTexture } from '../../utils/mosaicCharacterRenderer';
+import { InGameModulesAssetOverlay } from './InGameModulesAssetOverlay';
+import {
+  GameModuleAsset,
+  getModulesForGame,
+} from '../../data/gameModulesMetadata';
+import {
+  getEquippedAssetForSlot,
+  createCustomAssetThreeTexture,
+} from '../../utils/customCharacterStore';
 
 interface SpaceDogfightSimProps {
   powerOn: boolean;
   fluxFrequency: number;
   onExitToMenu?: () => void;
+  onSwitchToPixelArcade?: () => void;
 }
 
 export const SpaceDogfightSim3D: React.FC<SpaceDogfightSimProps> = ({
   powerOn,
   onExitToMenu,
+  onSwitchToPixelArcade,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [gameState, setGameState] = useState<'MENU' | 'PLAYING' | 'GAMEOVER' | 'VICTORY'>('MENU');
@@ -51,6 +65,25 @@ export const SpaceDogfightSim3D: React.FC<SpaceDogfightSimProps> = ({
   const [mosaicOverlayActive, setMosaicOverlayActive] = useState<boolean>(true);
   const [mosaicFidelityTier, setMosaicFidelityTier] = useState<'300' | '200' | '150' | 'ULTRA'>('150');
   const [showMosaicInspector, setShowMosaicInspector] = useState<boolean>(false);
+
+  // Tactical In-Game 2D/3D Modules Asset Deck
+  const [modulesOverlayOpen, setModulesOverlayOpen] = useState<boolean>(false);
+  const [activeModules, setActiveModules] = useState<GameModuleAsset[]>(() =>
+    getModulesForGame('SPACE_SIM').filter((m) => m.isEquipped)
+  );
+
+  const toggleModuleEquip = (moduleId: string) => {
+    setActiveModules((prev) => {
+      const isEq = prev.some((m) => m.id === moduleId);
+      if (isEq) {
+        return prev.filter((m) => m.id !== moduleId);
+      } else {
+        const all = getModulesForGame('SPACE_SIM');
+        const found = all.find((m) => m.id === moduleId);
+        return found ? [...prev, found] : prev;
+      }
+    });
+  };
 
   const gameRef = useRef<{
     scene: THREE.Scene;
@@ -180,28 +213,68 @@ export const SpaceDogfightSim3D: React.FC<SpaceDogfightSimProps> = ({
     );
     scene.add(starfield);
 
-    // Generate Level 4 Roman Mosaic Textures for Starships & Space Combat Entities
-    const starfighterMosaic = createLevel4MosaicTexture('STARFIGHTER_INTERCEPTOR', {
+    // Hand-Drawn Painterly Cosmic Sky Sphere for AAA Depth
+    const cosmicNebulaTexture = createLevel4MosaicTexture('DEEP_SPACE_NEBULA', {
       tileSize: 3,
       tileStyle: 'ROMAN_STONE',
-      primaryGlow: '#00f0ff',
-      groutIntensity: 45,
+      primaryGlow: '#c084fc',
+      groutIntensity: 25,
+      preservePaintingDetail: true,
     });
+    const skyDome = new THREE.Mesh(
+      new THREE.SphereGeometry(1600, 32, 32),
+      new THREE.MeshBasicMaterial({
+        map: cosmicNebulaTexture,
+        side: THREE.BackSide,
+        transparent: true,
+        opacity: 0.9,
+      })
+    );
+    scene.add(skyDome);
+
+    // Generate Level 4 Roman Mosaic Textures for Starships & Space Combat Entities
+    const equippedSpaceAsset = getEquippedAssetForSlot('SPACE_STARFIGHTER');
+    const starfighterMosaic = equippedSpaceAsset
+      ? createCustomAssetThreeTexture(equippedSpaceAsset)
+      : createLevel4MosaicTexture('STARFIGHTER_INTERCEPTOR', {
+          tileSize: 3,
+          tileStyle: 'ROMAN_STONE',
+          primaryGlow: '#00f0ff',
+          groutIntensity: 45,
+          preservePaintingDetail: true,
+        });
     const cruiserMosaic = createLevel4MosaicTexture('CRUISER_BOSS', {
       tileSize: 3,
       tileStyle: 'ROMAN_STONE',
       primaryGlow: '#ff0055',
       groutIntensity: 45,
+      preservePaintingDetail: true,
+    });
+    const stealthCorvetteMosaic = createLevel4MosaicTexture('STEALTH_CORVETTE', {
+      tileSize: 3,
+      tileStyle: 'QUANTUM_TRANSISTOR',
+      primaryGlow: '#00f0ff',
+      groutIntensity: 40,
+      preservePaintingDetail: true,
     });
     const droneFighterMosaic = createLevel4MosaicTexture('CYBER_DRONE', {
       tileSize: 3,
       tileStyle: 'QUANTUM_TRANSISTOR',
       primaryGlow: '#00ffff',
       groutIntensity: 40,
+      preservePaintingDetail: true,
     });
 
     const droneMosaicMat = new THREE.MeshStandardMaterial({
       map: droneFighterMosaic,
+      transparent: true,
+      alphaTest: 0.05,
+      metalness: 0.9,
+      roughness: 0.2,
+      side: THREE.DoubleSide,
+    });
+    const stealthMosaicMat = new THREE.MeshStandardMaterial({
+      map: stealthCorvetteMosaic,
       transparent: true,
       alphaTest: 0.05,
       metalness: 0.9,
@@ -280,6 +353,111 @@ export const SpaceDogfightSim3D: React.FC<SpaceDogfightSimProps> = ({
     thrusterRight.rotation.x = Math.PI / 2;
     thrusterRight.position.set(0.8, 0, 2.5);
     playerShip.add(thrusterRight);
+
+    // Celestial Roman Cyber Mosaic Monoliths & Relic Gateways in Deep Space
+    const spaceMuralMosaic1 = createLevel4MosaicTexture('ROMAN_CYBER_MOSAIC', {
+      tileSize: 3,
+      tileStyle: 'ROMAN_STONE',
+      primaryGlow: '#00f0ff',
+      groutIntensity: 40,
+    });
+    const spaceMuralMosaic2 = createLevel4MosaicTexture('CYBER_PILOT', {
+      tileSize: 3,
+      tileStyle: 'ROMAN_STONE',
+      primaryGlow: '#ffaa00',
+      groutIntensity: 40,
+    });
+    const spaceMuralMosaic3 = createLevel4MosaicTexture('GAUSS_RAILGUN', {
+      tileSize: 3,
+      tileStyle: 'QUANTUM_TRANSISTOR',
+      primaryGlow: '#00ffff',
+      groutIntensity: 35,
+    });
+
+    const spaceMuralMat1 = new THREE.MeshStandardMaterial({
+      map: spaceMuralMosaic1,
+      metalness: 0.8,
+      roughness: 0.2,
+      side: THREE.DoubleSide,
+    });
+    const spaceMuralMat2 = new THREE.MeshStandardMaterial({
+      map: spaceMuralMosaic2,
+      metalness: 0.8,
+      roughness: 0.2,
+      side: THREE.DoubleSide,
+    });
+    const spaceMuralMat3 = new THREE.MeshStandardMaterial({
+      map: spaceMuralMosaic3,
+      metalness: 0.8,
+      roughness: 0.2,
+      side: THREE.DoubleSide,
+    });
+
+    // Spawn 8 Deep Space Roman Cyber Monoliths with Tesserae Artwork
+    for (let i = 0; i < 8; i++) {
+      const monolithGroup = new THREE.Group();
+      const monolithPillar = new THREE.Mesh(
+        new THREE.BoxGeometry(16, 60, 16),
+        new THREE.MeshStandardMaterial({ color: 0x111625, metalness: 0.9, roughness: 0.2 })
+      );
+      monolithGroup.add(monolithPillar);
+
+      const muralMat = i % 3 === 0 ? spaceMuralMat1 : i % 3 === 1 ? spaceMuralMat2 : spaceMuralMat3;
+      const muralPlane = new THREE.Mesh(new THREE.PlaneGeometry(14, 38), muralMat);
+      muralPlane.position.set(0, 0, 8.1);
+      monolithGroup.add(muralPlane);
+
+      const angle = (i / 8) * Math.PI * 2;
+      const dist = 400 + (i % 2) * 200;
+      monolithGroup.position.set(Math.cos(angle) * dist, (i % 3 - 1) * 80, Math.sin(angle) * dist);
+      monolithGroup.rotation.y = angle + Math.PI / 2;
+      scene.add(monolithGroup);
+    }
+
+    // Dynamic 3D Mountable Hardpoints on Player Ship
+    const warpDriveLeft = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.2, 0.28, 2.2, 8),
+      new THREE.MeshStandardMaterial({ color: 0x00ffff, emissive: 0x0088cc, metalness: 0.9 })
+    );
+    warpDriveLeft.rotation.x = Math.PI / 2;
+    warpDriveLeft.position.set(-2.2, 0.1, 0.4);
+    playerShip.add(warpDriveLeft);
+
+    const warpDriveRight = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.2, 0.28, 2.2, 8),
+      new THREE.MeshStandardMaterial({ color: 0x00ffff, emissive: 0x0088cc, metalness: 0.9 })
+    );
+    warpDriveRight.rotation.x = Math.PI / 2;
+    warpDriveRight.position.set(2.2, 0.1, 0.4);
+    playerShip.add(warpDriveRight);
+
+    const gaussCannonLeft = new THREE.Mesh(
+      new THREE.BoxGeometry(0.15, 0.15, 1.8),
+      new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.95, roughness: 0.1 })
+    );
+    gaussCannonLeft.position.set(-1.8, -0.1, -0.6);
+    playerShip.add(gaussCannonLeft);
+
+    const gaussCannonRight = new THREE.Mesh(
+      new THREE.BoxGeometry(0.15, 0.15, 1.8),
+      new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.95, roughness: 0.1 })
+    );
+    gaussCannonRight.position.set(1.8, -0.1, -0.6);
+    playerShip.add(gaussCannonRight);
+
+    const astrolabeDish = new THREE.Mesh(
+      new THREE.TorusGeometry(0.4, 0.04, 6, 16),
+      new THREE.MeshStandardMaterial({ color: 0xffaa00, emissive: 0x664400, metalness: 0.85 })
+    );
+    astrolabeDish.rotation.x = Math.PI / 3;
+    astrolabeDish.position.set(0, 0.9, -0.4);
+    playerShip.add(astrolabeDish);
+
+    const aegisShieldMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(3.2, 16, 16),
+      new THREE.MeshBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.2, wireframe: true })
+    );
+    playerShip.add(aegisShieldMesh);
 
     scene.add(playerShip);
 
@@ -373,6 +551,10 @@ export const SpaceDogfightSim3D: React.FC<SpaceDogfightSimProps> = ({
           gameRef.current.viewMode = next;
           setViewMode(next);
           sounds.playClick(750);
+        }
+        if (e.code === 'KeyM') {
+          setModulesOverlayOpen((prev) => !prev);
+          sounds.playClick(700);
         }
         if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
           gameRef.current.isBoosting = true;
@@ -860,6 +1042,25 @@ export const SpaceDogfightSim3D: React.FC<SpaceDogfightSimProps> = ({
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2 pointer-events-auto">
+          {/* 64x64 Retro Pixel Arcade Switcher */}
+          {onSwitchToPixelArcade && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                sounds.playClick(900);
+                onSwitchToPixelArcade();
+              }}
+              className="px-2 py-1 rounded border border-amber-500/50 bg-amber-950/80 hover:bg-amber-900 text-amber-300 text-[10px] font-bold tracking-wider flex items-center gap-1 transition-all shadow-[0_0_10px_rgba(245,158,11,0.3)]"
+              title="Switch to 64x64 Retro Pixel Arcade Version"
+            >
+              <Gamepad2 className="w-3 h-3 text-amber-400" />
+              <span className="hidden sm:inline">64x64 PIXEL MODE</span>
+              <span className="sm:hidden">64x64</span>
+            </button>
+          )}
+
           {/* Mosaic Matrix Overlay Toggle */}
           <button
             type="button"
@@ -917,6 +1118,26 @@ export const SpaceDogfightSim3D: React.FC<SpaceDogfightSimProps> = ({
             <Sliders className="w-3 h-3" />
             <span className="hidden sm:inline">{invertPitch ? 'PITCH: INVERTED' : 'PITCH: NORMAL'}</span>
             <span className="sm:hidden">{invertPitch ? 'INV' : 'NORM'}</span>
+          </button>
+
+          {/* Tactical 2D/3D Modules Asset Deck Button */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              setModulesOverlayOpen(true);
+              sounds.playClick(750);
+            }}
+            className="px-2.5 py-1 bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-400 text-cyan-300 rounded font-bold text-[10px] sm:text-[11px] flex items-center gap-1.5 shadow-[0_0_12px_rgba(0,240,255,0.3)] active:scale-95 transition-all"
+            title="Open 2D/3D Tactical Modules Deck (M)"
+          >
+            <Database className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+            <span className="hidden sm:inline">MODULES [M]</span>
+            <span className="sm:hidden">MODS</span>
+            <span className="px-1 py-0.2 rounded bg-cyan-400/20 text-[9px] text-cyan-200">
+              {activeModules.length}
+            </span>
           </button>
 
           {/* View Toggle */}
@@ -1408,6 +1629,15 @@ export const SpaceDogfightSim3D: React.FC<SpaceDogfightSimProps> = ({
           </div>
         </div>
       )}
+
+      {/* 2D First, then 3D Tactical In-Game Modules & Asset Deck Overlay */}
+      <InGameModulesAssetOverlay
+        isOpen={modulesOverlayOpen}
+        onClose={() => setModulesOverlayOpen(false)}
+        gameMode="SPACE_SIM"
+        activeModules={activeModules}
+        onToggleModuleEquip={toggleModuleEquip}
+      />
     </div>
   );
 };
