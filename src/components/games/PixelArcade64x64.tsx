@@ -37,6 +37,14 @@ import {
   generatePixelSprite64,
   MosaicCharacterType,
   createLevel4MosaicTexture,
+  createStarfighterHero3DMesh,
+  createValkyrieGundam3DMesh,
+  createGoliathBoss3DMesh,
+  createCyberPilot3DMesh,
+  createStealthCorvette3DMesh,
+  createCruiserBoss3DMesh,
+  createSentinelDroid3DMesh,
+  createCyberDrone3DMesh,
 } from '../../utils/mosaicCharacterRenderer';
 import {
   getEquippedAssetForSlot,
@@ -47,6 +55,13 @@ import {
 } from '../../utils/customCharacterStore';
 import { InGameModulesAssetOverlay } from './InGameModulesAssetOverlay';
 import { getModulesForGame } from '../../data/gameModulesMetadata';
+import {
+  subscribeToCrossModuleBus,
+  calculateCrossModulePerks,
+  dispatchGameCombatEvent,
+  CrossModuleState,
+  getCrossModuleState,
+} from '../../utils/crossModuleStateBus';
 
 export type PixelGameType =
   | 'PIXEL_SPACE_SIM'
@@ -58,6 +73,178 @@ export type PixelGameType =
 export type ArcadeFidelityResolution = 64 | 128 | 256 | 512 | 1024;
 export type ArcadeEngineMode = '3D_TRUE_MESH' | '2D_PIXEL_BUFFER';
 export type CameraViewAngle = 'CHASE_CAM' | 'COCKPIT_CAM' | 'ISOMETRIC' | 'ORBIT_360';
+
+export interface VirtualResolutionPreset {
+  id: string;
+  width: number;
+  height: number;
+  name: string;
+  badge: string;
+  aspect: '16:9' | '1:1';
+  description: string;
+  scaleNote: string;
+  physicalTarget: string;
+  tier: 'RETRO' | 'MOBILE' | 'HD' | 'ULTRA_HD';
+}
+
+export const VIRTUAL_RESOLUTIONS: VirtualResolutionPreset[] = [
+  {
+    id: '64x64',
+    width: 64,
+    height: 64,
+    name: '64×64 Nano Crunch',
+    badge: '1:1 8-Bit',
+    aspect: '1:1',
+    description: 'Ultra-low pixel grid with chunky Roman Mosaic tesserae',
+    scaleNote: 'Integer 1:1 Pixel Box (Up to 16×)',
+    physicalTarget: 'Square Arcade Display',
+    tier: 'RETRO',
+  },
+  {
+    id: '128x128',
+    width: 128,
+    height: 128,
+    name: '128×128 Neo-Geo',
+    badge: '1:1 16-Bit',
+    aspect: '1:1',
+    description: 'Classic 128-square arcade display buffer',
+    scaleNote: 'Integer 1:1 Pixel Box (8× to 1024p)',
+    physicalTarget: 'Square Arcade Display',
+    tier: 'RETRO',
+  },
+  {
+    id: '160x90',
+    width: 160,
+    height: 90,
+    name: '160×90 Micro Lo-Fi',
+    badge: '16:9 Retro',
+    aspect: '16:9',
+    description: 'Handheld 16:9 retro virtual framebuffer with chunky pixel grid',
+    scaleNote: '12× Integer Scale to 1080p HD',
+    physicalTarget: '1080×1920 Screen (12× Multiplier)',
+    tier: 'RETRO',
+  },
+  {
+    id: '240x135',
+    width: 240,
+    height: 135,
+    name: '240×135 Retro Widescreen',
+    badge: '16:9 Indie',
+    aspect: '16:9',
+    description: 'Classic 16:9 pixel art virtual canvas for pixel-perfect presentation',
+    scaleNote: '8× Integer Scale to 1080p HD',
+    physicalTarget: '1080×1920 Screen (8× Multiplier)',
+    tier: 'RETRO',
+  },
+  {
+    id: '256x256',
+    width: 256,
+    height: 256,
+    name: '256×256 Hi-Color Square',
+    badge: '1:1 32-Bit',
+    aspect: '1:1',
+    description: 'Detailed Roman mosaic tesserae canvas with Capcom/Neo-Geo depth',
+    scaleNote: '4× Integer Scale to 1024p',
+    physicalTarget: 'Square Arcade Display',
+    tier: 'MOBILE',
+  },
+  {
+    id: '320x180',
+    width: 320,
+    height: 180,
+    name: '320×180 Classic Smartphone',
+    badge: '16:9 Mobile',
+    aspect: '16:9',
+    description: 'Standard modern smartphone indie resolution (Celeste/Dead Cells standard)',
+    scaleNote: '6× Integer Scale to 1080p HD (12× to 4K)',
+    physicalTarget: '1080×1920 Screen (6× Multiplier)',
+    tier: 'MOBILE',
+  },
+  {
+    id: '480x270',
+    width: 480,
+    height: 270,
+    name: '480×270 HD Smartphone',
+    badge: '16:9 HD',
+    aspect: '16:9',
+    description: 'High-density smartphone virtual buffer (4× to 1080p, 8× to 4K)',
+    scaleNote: '4× Integer Scale to 1080p HD',
+    physicalTarget: '1080×1920 Screen (4× Multiplier)',
+    tier: 'HD',
+  },
+  {
+    id: '512x512',
+    width: 512,
+    height: 512,
+    name: '512×512 HD Mosaic Square',
+    badge: '1:1 FHD',
+    aspect: '1:1',
+    description: 'High-density mosaic raster buffer with sub-pixel micro-relief',
+    scaleNote: '2× Integer Scale to 1024p',
+    physicalTarget: 'Square Arcade Display',
+    tier: 'HD',
+  },
+  {
+    id: '640x360',
+    width: 640,
+    height: 360,
+    name: '640×360 Hi-Fi 360p Widescreen',
+    badge: '16:9 Hi-Fi',
+    aspect: '16:9',
+    description: 'High fidelity mobile pixel buffer with rich shader glow',
+    scaleNote: '3× Integer Scale to 1080p HD',
+    physicalTarget: '1080×1920 Screen (3× Multiplier)',
+    tier: 'HD',
+  },
+  {
+    id: '960x540',
+    width: 960,
+    height: 540,
+    name: '960×540 qHD Sub-Pixel Master',
+    badge: '16:9 qHD',
+    aspect: '16:9',
+    description: 'Quarter HD rasterizer with exact 2× integer scale to 1080p',
+    scaleNote: '2× Integer Scale to 1080p HD',
+    physicalTarget: '1080×1920 Screen (2× Multiplier)',
+    tier: 'HD',
+  },
+  {
+    id: '1024x1024',
+    width: 1024,
+    height: 1024,
+    name: '1024×1024 Ultra Roman Fresco',
+    badge: '1:1 Ultra',
+    aspect: '1:1',
+    description: '1-Megapixel ultra high-density Roman tesserae matrix with HDR bloom',
+    scaleNote: 'Native 1:1 Ultra Display',
+    physicalTarget: 'Retina Ultra Display',
+    tier: 'ULTRA_HD',
+  },
+  {
+    id: '1280x720',
+    width: 1280,
+    height: 720,
+    name: '1280×720 720p HD Native',
+    badge: '16:9 720p',
+    aspect: '16:9',
+    description: 'Standard High Definition 720p crisp rendering mode',
+    scaleNote: 'Native 720p / 1.5× to 1080p',
+    physicalTarget: '720p/1080p HD Screen',
+    tier: 'ULTRA_HD',
+  },
+  {
+    id: '1920x1080',
+    width: 1920,
+    height: 1080,
+    name: '1920×1080 1080p Full HD Native',
+    badge: '16:9 1080p',
+    aspect: '16:9',
+    description: 'Full HD Native physical canvas with sub-pixel Roman mosaic tesserae shaders',
+    scaleNote: '1:1 Full HD Physical Screen',
+    physicalTarget: '1080p/4K High DPI Display',
+    tier: 'ULTRA_HD',
+  },
+];
 
 interface PixelArcade64x64Props {
   initialGame?: PixelGameType;
@@ -79,13 +266,41 @@ export const PixelArcade64x64: React.FC<PixelArcade64x64Props> = ({
   const [health, setHealth] = useState<number>(100);
   const [energy, setEnergy] = useState<number>(100);
   const [wave, setWave] = useState<number>(1);
-  const [fidelity, setFidelity] = useState<ArcadeFidelityResolution>(64);
+  const [fidelity, setFidelity] = useState<ArcadeFidelityResolution>(256);
+  const [selectedVirtualResId, setSelectedVirtualResId] = useState<string>('320x180');
+  const [integerMultiplier, setIntegerMultiplier] = useState<number | 'AUTO'>('AUTO');
   const [crtEffect, setCrtEffect] = useState<boolean>(true);
   const [tesseraeGrid, setTesseraeGrid] = useState<boolean>(false);
   const [hdrGlint, setHdrGlint] = useState<boolean>(true);
   const [paletteMode, setPaletteMode] = useState<
     'ORIGINAL' | 'CYBER_CYAN' | 'ROMAN_GOLD' | 'CRIMSON_NEO' | 'EMERALD_QUANTUM' | 'AMETHYST'
   >('ORIGINAL');
+
+  // Cross-Module Unified State & Tactical Perks
+  const [crossModuleState, setCrossModuleState] = useState<CrossModuleState>(getCrossModuleState());
+  const perks = calculateCrossModulePerks(crossModuleState);
+
+  useEffect(() => {
+    const unsub = subscribeToCrossModuleBus((st) => {
+      setCrossModuleState(st);
+      if (st.paletteMode && st.paletteMode !== 'ORIGINAL') {
+        setPaletteMode(st.paletteMode as any);
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  // Update fidelity tier based on selected virtual resolution
+  useEffect(() => {
+    const currentRes = VIRTUAL_RESOLUTIONS.find((r) => r.id === selectedVirtualResId);
+    if (!currentRes) return;
+    const maxDim = Math.max(currentRes.width, currentRes.height);
+    if (maxDim <= 64) setFidelity(64);
+    else if (maxDim <= 160) setFidelity(128);
+    else if (maxDim <= 320) setFidelity(256);
+    else if (maxDim <= 640) setFidelity(512);
+    else setFidelity(1024);
+  }, [selectedVirtualResId]);
 
   // 3D True Mesh Engine & Camera View State
   const [arcadeEngineMode, setArcadeEngineMode] = useState<ArcadeEngineMode>('3D_TRUE_MESH');
@@ -324,15 +539,32 @@ export const PixelArcade64x64: React.FC<PixelArcade64x64Props> = ({
     const ctx = gameCanvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return;
 
-    // Dynamically sized internal resolution buffer based on active fidelity level
+    const curVirtualRes =
+      VIRTUAL_RESOLUTIONS.find((r) => r.id === selectedVirtualResId) || VIRTUAL_RESOLUTIONS[0];
+
+    const vW = curVirtualRes.width;
+    const vH = curVirtualRes.height;
+
+    // Calculate integer multiplier for crisp display output
+    let effectiveMultiplier = 2;
+    if (typeof integerMultiplier === 'number') {
+      effectiveMultiplier = integerMultiplier;
+    } else {
+      effectiveMultiplier = Math.max(1, Math.min(4, Math.floor(640 / vW)));
+    }
+
+    gameCanvas.width = vW * effectiveMultiplier;
+    gameCanvas.height = vH * effectiveMultiplier;
+
+    // Dynamically sized internal virtual resolution buffer (e.g. 320x180, 480x270, 64x64)
     const buffer = document.createElement('canvas');
-    buffer.width = fidelity;
-    buffer.height = fidelity;
+    buffer.width = vW;
+    buffer.height = vH;
     const bCtx = buffer.getContext('2d', { willReadFrequently: true })!;
-    bCtx.imageSmoothingEnabled = fidelity >= 256;
+    bCtx.imageSmoothingEnabled = false;
 
     // Coordinate multiplier to map 0..64 logical coordinates to fidelity resolution
-    const S = fidelity / 64;
+    const S = Math.min(vW, vH) / 64;
 
     const spawnEnemiesForSpace = () => {
       const state = engineRef.current;
@@ -424,18 +656,20 @@ export const PixelArcade64x64: React.FC<PixelArcade64x64Props> = ({
           bCtx.fillRect(Math.floor(starX), Math.floor(starY), Math.ceil(starSize), Math.ceil(starSize));
         });
 
-        // Player Controls
-        const speed = 0.8;
+        // Player Controls with Gear & Aurora Overclock Boosts
+        const speed = 0.8 * perks.engineThrustMultiplier;
         if (keysRef.current['ArrowLeft'] || keysRef.current['KeyA']) state.playerX = Math.max(4, state.playerX - speed);
         if (keysRef.current['ArrowRight'] || keysRef.current['KeyD']) state.playerX = Math.min(60, state.playerX + speed);
         if (keysRef.current['ArrowUp'] || keysRef.current['KeyW']) state.playerY = Math.max(6, state.playerY - speed);
         if (keysRef.current['ArrowDown'] || keysRef.current['KeyS']) state.playerY = Math.min(58, state.playerY + speed);
 
-        // Shoot lasers
-        if ((keysRef.current['Space'] || keysRef.current['KeyZ']) && timestamp - state.lastShotTime > 160) {
+        // Shoot lasers with Light-Protocol Spectrum harmonics
+        const shootCooldown = Math.max(70, 160 / perks.fireRateMultiplier);
+        if ((keysRef.current['Space'] || keysRef.current['KeyZ']) && timestamp - state.lastShotTime > shootCooldown) {
           state.lastShotTime = timestamp;
-          state.bullets.push({ x: state.playerX - 2.5, y: state.playerY - 4, vx: 0, vy: -1.8, color: '#00f0ff' });
-          state.bullets.push({ x: state.playerX + 2.5, y: state.playerY - 4, vx: 0, vy: -1.8, color: '#00f0ff' });
+          const laserCol = perks.laserColor;
+          state.bullets.push({ x: state.playerX - 2.5, y: state.playerY - 4, vx: 0, vy: -1.8, color: laserCol });
+          state.bullets.push({ x: state.playerX + 2.5, y: state.playerY - 4, vx: 0, vy: -1.8, color: laserCol });
           sounds.playLaserPew();
           haptics.trigger('light');
         }
@@ -455,7 +689,7 @@ export const PixelArcade64x64: React.FC<PixelArcade64x64Props> = ({
           const bh = Math.max(2, 3.5 * S);
 
           if (fidelity >= 256 && hdrGlint) {
-            bCtx.fillStyle = 'rgba(0, 240, 255, 0.35)';
+            bCtx.fillStyle = perks.laserColor + '55';
             bCtx.fillRect(bx - S * 0.5, by - S * 0.5, bw + S, bh + S);
             bCtx.fillStyle = '#ffffff';
             bCtx.fillRect(bx, by, bw, bh);
@@ -494,12 +728,13 @@ export const PixelArcade64x64: React.FC<PixelArcade64x64Props> = ({
             bCtx.fillRect(Math.floor(ex - 4 * S), Math.floor(ey - 4 * S), 8 * S, 8 * S);
           }
 
-          // Bullet Collisions
+          // Bullet Collisions with Cross-Module Damage Multiplier
           for (let j = state.bullets.length - 1; j >= 0; j--) {
             const b = state.bullets[j];
             if (Math.abs(b.x - e.x) < 4.5 && Math.abs(b.y - e.y) < 4.5) {
               state.bullets.splice(j, 1);
-              e.hp--;
+              const damage = Math.max(1, Math.round(1 * perks.weaponDamageMultiplier));
+              e.hp -= damage;
 
               // Spark particles
               const pCount = fidelity >= 256 ? 6 : 3;
@@ -511,7 +746,7 @@ export const PixelArcade64x64: React.FC<PixelArcade64x64Props> = ({
                   vy: (Math.random() - 0.5) * 2,
                   life: 14,
                   maxLife: 14,
-                  color: p % 2 === 0 ? '#00f0ff' : '#fbbf24',
+                  color: p % 2 === 0 ? perks.laserColor : '#fbbf24',
                   size: fidelity >= 256 ? 1.5 : 1,
                 });
               }
@@ -519,7 +754,13 @@ export const PixelArcade64x64: React.FC<PixelArcade64x64Props> = ({
               if (e.hp <= 0) {
                 sounds.playExplosionBoom();
                 haptics.trigger('medium');
-                setScore((s) => s + (e.type === 'CORVETTE' ? 250 : 100));
+                const gained = e.type === 'CORVETTE' ? 250 : 100;
+                setScore((s) => s + gained);
+                dispatchGameCombatEvent({
+                  type: 'ENEMY_KILL',
+                  scoreGained: gained,
+                  sourceGame: 'Pixel Space Sim',
+                });
                 state.enemies.splice(i, 1);
                 break;
               }
@@ -916,14 +1157,25 @@ export const PixelArcade64x64: React.FC<PixelArcade64x64Props> = ({
         }
       }
 
-      // Blit internal buffer to display viewport canvas
-      ctx.imageSmoothingEnabled = fidelity >= 256;
+      // Blit internal buffer to display viewport canvas with pixelated rendering
+      ctx.imageSmoothingEnabled = false;
       ctx.drawImage(buffer, 0, 0, gameCanvas.width, gameCanvas.height);
     };
 
     animId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animId);
-  }, [activeGame, gameState, wave, tesseraeGrid, fidelity, hdrGlint, arcadeEngineMode, renderEnhanceMode]);
+  }, [
+    activeGame,
+    gameState,
+    wave,
+    tesseraeGrid,
+    fidelity,
+    selectedVirtualResId,
+    integerMultiplier,
+    hdrGlint,
+    arcadeEngineMode,
+    renderEnhanceMode,
+  ]);
 
   // ==========================================
   // TRUE 3D HOLOGRAPHIC ARCADE GAME ENGINE (THREE.JS)
@@ -978,10 +1230,10 @@ export const PixelArcade64x64: React.FC<PixelArcade64x64Props> = ({
     scene.add(particlesGroup);
 
     // Textures & Materials from Roman Mosaic Processor
-    const heroTex = createLevel4MosaicTexture('STARFIGHTER_INTERCEPTOR', 128);
-    const mechTex = createLevel4MosaicTexture('VALKYRIE_GUNDAM', 128);
-    const enemyTex = createLevel4MosaicTexture('STEALTH_CORVETTE', 128);
-    const bossTex = createLevel4MosaicTexture('CRUISER_BOSS', 128);
+    const heroTex = createLevel4MosaicTexture('STARFIGHTER_INTERCEPTOR', { width: 128, height: 128 });
+    const mechTex = createLevel4MosaicTexture('VALKYRIE_GUNDAM', { width: 128, height: 128 });
+    const enemyTex = createLevel4MosaicTexture('STEALTH_CORVETTE', { width: 128, height: 128 });
+    const bossTex = createLevel4MosaicTexture('CRUISER_BOSS', { width: 128, height: 128 });
 
     const heroMat = new THREE.MeshStandardMaterial({
       map: heroTex,
@@ -1017,65 +1269,12 @@ export const PixelArcade64x64: React.FC<PixelArcade64x64Props> = ({
     // 3D GAME 1: SPACE DOGFIGHT SIM (3D ASSETS)
     // ==========================================
     if (activeGame === 'PIXEL_SPACE_SIM') {
-      // 3D Starfighter Mesh Assembly
-      // Fuselage
-      const fuselageGeo = new THREE.ConeGeometry(0.7, 3.2, 8);
-      fuselageGeo.rotateX(Math.PI / 2);
-      const fuselage = new THREE.Mesh(fuselageGeo, heroMat);
-      playerGroup.add(fuselage);
-
-      // Delta Wings
-      const wingGeo = new THREE.BoxGeometry(4.8, 0.12, 1.8);
-      wingGeo.translate(0, 0, 0.4);
-      const wings = new THREE.Mesh(wingGeo, heroMat);
-      playerGroup.add(wings);
-
-      // Wingtip Cannons
-      const cannonGeo = new THREE.CylinderGeometry(0.06, 0.06, 1.2, 8);
-      cannonGeo.rotateX(Math.PI / 2);
-      const leftCannon = new THREE.Mesh(cannonGeo, new THREE.MeshStandardMaterial({ color: 0x00f0ff, emissive: 0x00f0ff, emissiveIntensity: 0.5 }));
-      leftCannon.position.set(-2.4, 0, 0.4);
-      const rightCannon = leftCannon.clone();
-      rightCannon.position.set(2.4, 0, 0.4);
-      playerGroup.add(leftCannon);
-      playerGroup.add(rightCannon);
-
-      // Cockpit Canopy
-      const canopyGeo = new THREE.SphereGeometry(0.42, 12, 12);
-      canopyGeo.scale(0.9, 0.55, 1.6);
-      const canopyMat = new THREE.MeshPhysicalMaterial({
-        color: 0x00f0ff,
-        transmission: 0.7,
-        opacity: 1,
-        transparent: true,
-        roughness: 0.1,
-        ior: 1.5,
+      // High-Fidelity 3D Starfighter with Dual-Sided Front & Back Mosaic Mesh
+      const starfighterMesh = createStarfighterHero3DMesh({
+        wireframe: wireframeMode,
+        scale: 0.9,
       });
-      const canopy = new THREE.Mesh(canopyGeo, canopyMat);
-      canopy.position.set(0, 0.3, -0.3);
-      playerGroup.add(canopy);
-
-      // Twin Thruster Nozzles & Glowing Plumes
-      const thrusterGeo = new THREE.CylinderGeometry(0.22, 0.28, 0.6, 8);
-      thrusterGeo.rotateX(Math.PI / 2);
-      const thrusterMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.9 });
-      const leftThruster = new THREE.Mesh(thrusterGeo, thrusterMat);
-      leftThruster.position.set(-0.4, 0, 1.5);
-      const rightThruster = leftThruster.clone();
-      rightThruster.position.set(0.4, 0, 1.5);
-      playerGroup.add(leftThruster);
-      playerGroup.add(rightThruster);
-
-      // Glowing Ion Plumes
-      const plumeGeo = new THREE.ConeGeometry(0.2, 1.2, 8);
-      plumeGeo.rotateX(-Math.PI / 2);
-      const plumeMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
-      const leftPlume = new THREE.Mesh(plumeGeo, plumeMat);
-      leftPlume.position.set(-0.4, 0, 2.2);
-      const rightPlume = leftPlume.clone();
-      rightPlume.position.set(0.4, 0, 2.2);
-      playerGroup.add(leftPlume);
-      playerGroup.add(rightPlume);
+      playerGroup.add(starfighterMesh);
 
       // 3D Starfield Environment
       const starGeo = new THREE.BufferGeometry();
@@ -1105,45 +1304,12 @@ export const PixelArcade64x64: React.FC<PixelArcade64x64Props> = ({
     // 3D GAME 2: GUNDAM MECH ARENA (3D ASSETS)
     // ==========================================
     else if (activeGame === 'PIXEL_GUNDAM_MECH') {
-      // 3D Mobile Suit Gundam Mesh
-      const torso = new THREE.Mesh(new THREE.BoxGeometry(1.6, 2.0, 1.2), mechMat);
-      playerGroup.add(torso);
-
-      const head = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.8), mechMat);
-      head.position.set(0, 1.4, 0);
-      playerGroup.add(head);
-
-      // Gold V-Fin Antenna
-      const vFinL = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.9, 4), new THREE.MeshBasicMaterial({ color: 0xf59e0b }));
-      vFinL.rotation.z = Math.PI / 4;
-      vFinL.position.set(-0.35, 1.85, 0.3);
-      const vFinR = vFinL.clone();
-      vFinR.rotation.z = -Math.PI / 4;
-      vFinR.position.set(0.35, 1.85, 0.3);
-      playerGroup.add(vFinL);
-      playerGroup.add(vFinR);
-
-      // Pauldrons
-      const pauldronL = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.8, 1.1), mechMat);
-      pauldronL.position.set(-1.3, 0.6, 0);
-      const pauldronR = pauldronL.clone();
-      pauldronR.position.set(1.3, 0.6, 0);
-      playerGroup.add(pauldronL);
-      playerGroup.add(pauldronR);
-
-      // 3D Glowing Beam Saber
-      const saberHilt = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.6, 8), new THREE.MeshStandardMaterial({ color: 0xffffff }));
-      const saberBlade = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.06, 0.06, 3.2, 8),
-        new THREE.MeshBasicMaterial({ color: 0x00f0ff })
-      );
-      saberBlade.position.set(0, 1.7, 0);
-      const beamSaber = new THREE.Group();
-      beamSaber.add(saberHilt);
-      beamSaber.add(saberBlade);
-      beamSaber.position.set(1.5, 0.2, 0.8);
-      beamSaber.rotation.x = Math.PI / 3;
-      playerGroup.add(beamSaber);
+      // 3D Mobile Suit Gundam with Front & Back Mosaic Mesh Rig
+      const gundamMesh = createValkyrieGundam3DMesh({
+        wireframe: wireframeMode,
+        scale: 0.85,
+      });
+      playerGroup.add(gundamMesh);
 
       // Cyber Grid Floor
       const grid = new THREE.GridHelper(80, 40, 0x00f0ff, 0x1e293b);
@@ -1213,10 +1379,13 @@ export const PixelArcade64x64: React.FC<PixelArcade64x64Props> = ({
       neonLines.position.set(0, -1.98, -80);
       envGroup.add(neonLines);
 
-      // 3D Cyber Runner Character
-      const runnerBody = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.6, 0.8), heroMat);
-      runnerBody.position.set(0, -1.2, 0);
-      playerGroup.add(runnerBody);
+      // 3D Cyber Pilot Runner with Front & Back Rendering
+      const runnerMesh = createCyberPilot3DMesh({
+        wireframe: wireframeMode,
+        scale: 0.7,
+      });
+      runnerMesh.position.set(0, -1.2, 0);
+      playerGroup.add(runnerMesh);
 
       // Neon Horizon Sun
       const sunGeo = new THREE.CircleGeometry(14, 32);
@@ -1252,7 +1421,7 @@ export const PixelArcade64x64: React.FC<PixelArcade64x64Props> = ({
     }
     const lasers3D: Laser3D[] = [];
 
-    // Spawn 3D Enemies
+    // Spawn 3D Enemies with Front & Back 3D Mesh
     const spawnEnemy3D = () => {
       if (enemies3D.length > 8) return;
       const isBoss = Math.random() < 0.15;
@@ -1260,21 +1429,20 @@ export const PixelArcade64x64: React.FC<PixelArcade64x64Props> = ({
 
       let enemyMesh: THREE.Object3D;
       if (isBoss) {
-        const bg = new THREE.Group();
-        const bCore = new THREE.Mesh(new THREE.BoxGeometry(4.5, 1.8, 3.2), bossMat);
-        const bWings = new THREE.Mesh(new THREE.ConeGeometry(3, 4, 4), bossMat);
-        bWings.rotation.z = Math.PI;
-        bg.add(bCore);
-        bg.add(bWings);
-        enemyMesh = bg;
+        enemyMesh = createCruiserBoss3DMesh({
+          wireframe: wireframeMode,
+          scale: 0.75,
+        });
       } else if (isCorvette) {
-        const cg = new THREE.Group();
-        const cBody = new THREE.Mesh(new THREE.ConeGeometry(1.2, 3.0, 6), enemyMat);
-        cBody.rotation.x = Math.PI / 2;
-        cg.add(cBody);
-        enemyMesh = cg;
+        enemyMesh = createStealthCorvette3DMesh({
+          wireframe: wireframeMode,
+          scale: 0.8,
+        });
       } else {
-        enemyMesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.8, 1), enemyMat);
+        enemyMesh = createCyberDrone3DMesh({
+          wireframe: wireframeMode,
+          scale: 0.75,
+        });
       }
 
       enemyMesh.position.set((Math.random() - 0.5) * 16, (Math.random() - 0.5) * 10, -50 - Math.random() * 20);
@@ -1566,46 +1734,102 @@ export const PixelArcade64x64: React.FC<PixelArcade64x64Props> = ({
           </div>
         </div>
       ) : (
-        /* Dynamic Pixel Fidelity Resolution Selector Bar (2D Mode) */
-        <div className="w-full bg-neutral-950/80 border border-white/10 rounded-lg p-2 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <div className="flex items-center gap-2 text-xs">
-            <Cpu className="w-4 h-4 text-cyan-400" />
-            <span className="text-neutral-300 font-bold">PIXEL FIDELITY SCALING:</span>
+        /* Dynamic Virtual Low-Resolution & Integer Scaler Bar (2D Mode) */
+        <div className="w-full bg-neutral-950/90 border border-cyan-500/30 rounded-lg p-2.5 flex flex-col space-y-2">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1.5 pb-2 border-b border-white/10">
+            <div className="flex items-center gap-2 text-xs">
+              <Cpu className="w-4 h-4 text-cyan-400" />
+              <span className="text-neutral-200 font-bold">VIRTUAL LOW-RESOLUTION FRAMEBUFFER:</span>
+            </div>
+            <div className="text-[10px] text-cyan-400 font-mono">
+              Aspect:{' '}
+              <b className="text-white">
+                {VIRTUAL_RESOLUTIONS.find((r) => r.id === selectedVirtualResId)?.aspect || '16:9'}
+              </b>{' '}
+              | Internal:{' '}
+              <b className="text-white">
+                {VIRTUAL_RESOLUTIONS.find((r) => r.id === selectedVirtualResId)?.width}×
+                {VIRTUAL_RESOLUTIONS.find((r) => r.id === selectedVirtualResId)?.height}
+              </b>
+            </div>
           </div>
 
+          {/* Virtual Resolution Presets (Smartphone 16:9 & Arcade 1:1) */}
           <div className="flex items-center gap-1.5 flex-wrap">
-            {(
-              [
-                { res: 64, label: '64x64 Lo-Fi Crunch', badge: '8-Bit', color: 'border-cyan-500' },
-                { res: 128, label: '128x128 Neo-Geo', badge: '32-Bit', color: 'border-blue-500' },
-                { res: 256, label: '256x256 Hi-Bit HD', badge: 'HD', color: 'border-emerald-500' },
-                { res: 512, label: '512x512 Full HD', badge: 'FHD', color: 'border-purple-500' },
-                { res: 1024, label: '1024x1024 Ultra-HD & Beyond', badge: '4K', color: 'border-amber-500' },
-              ] as const
-            ).map((item) => {
-              const isSel = fidelity === item.res;
+            {VIRTUAL_RESOLUTIONS.map((item) => {
+              const isSel = selectedVirtualResId === item.id;
               return (
                 <button
                   type="button"
-                  key={item.res}
+                  key={item.id}
                   onClick={() => {
-                    setFidelity(item.res);
+                    setSelectedVirtualResId(item.id);
                     sounds.playClick(900);
                     haptics.trigger('medium');
                   }}
                   className={`px-2.5 py-1 rounded text-[10px] font-bold transition-all flex items-center gap-1.5 border ${
                     isSel
-                      ? `bg-cyan-950 text-white ${item.color} shadow-[0_0_12px_rgba(0,240,255,0.4)]`
+                      ? `bg-cyan-950 text-white border-cyan-400 shadow-[0_0_12px_rgba(0,240,255,0.4)]`
                       : 'bg-white/5 text-neutral-400 border-white/10 hover:text-white'
                   }`}
+                  title={`${item.name}: ${item.description}`}
                 >
-                  <span className="px-1 py-0.2 rounded bg-black/60 text-[8px] font-black text-cyan-300">
+                  <span
+                    className={`px-1 py-0.2 rounded text-[8px] font-black ${
+                      item.aspect === '16:9'
+                        ? 'bg-cyan-500/20 text-cyan-300'
+                        : 'bg-purple-500/20 text-purple-300'
+                    }`}
+                  >
                     {item.badge}
                   </span>
-                  <span>{item.res}x{item.res}</span>
+                  <span>
+                    {item.width}×{item.height}
+                  </span>
                 </button>
               );
             })}
+          </div>
+
+          {/* Integer Multiplier Scaler Engine for High-DPI Smartphone Screens */}
+          <div className="pt-2 border-t border-white/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 text-[10px]">
+              <Maximize2 className="w-3.5 h-3.5 text-amber-400" />
+              <span className="text-neutral-300 font-bold">PHYSICAL INTEGER SCALER:</span>
+            </div>
+
+            <div className="flex items-center gap-1 flex-wrap">
+              {(
+                [
+                  { val: 1, label: '1× Native' },
+                  { val: 2, label: '2× Integer' },
+                  { val: 3, label: '3× Integer' },
+                  { val: 4, label: '4× (1080p Target)' },
+                  { val: 6, label: '6× (Mobile FHD)' },
+                  { val: 'AUTO', label: 'AUTO INTEGER FIT' },
+                ] as const
+              ).map((scaleOpt) => {
+                const isSel = integerMultiplier === scaleOpt.val;
+                return (
+                  <button
+                    type="button"
+                    key={scaleOpt.label}
+                    onClick={() => {
+                      setIntegerMultiplier(scaleOpt.val as any);
+                      sounds.playClick(700);
+                      haptics.trigger('light');
+                    }}
+                    className={`px-2 py-0.5 rounded text-[9px] font-bold border transition-all ${
+                      isSel
+                        ? 'bg-amber-950 text-amber-200 border-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.3)]'
+                        : 'bg-white/5 text-neutral-400 border-white/10 hover:text-white'
+                    }`}
+                  >
+                    {scaleOpt.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
@@ -1656,21 +1880,33 @@ export const PixelArcade64x64: React.FC<PixelArcade64x64Props> = ({
             HEALTH <b className="text-emerald-400">{health}%</b>
           </div>
           <div>
-            MODE <b className="text-purple-300">{arcadeEngineMode === '3D_TRUE_MESH' ? 'TRUE 3D' : `${fidelity}x${fidelity}`}</b>
+            MODE{' '}
+            <b className="text-purple-300">
+              {arcadeEngineMode === '3D_TRUE_MESH'
+                ? 'TRUE 3D'
+                : `${VIRTUAL_RESOLUTIONS.find((r) => r.id === selectedVirtualResId)?.width || 320}x${
+                    VIRTUAL_RESOLUTIONS.find((r) => r.id === selectedVirtualResId)?.height || 180
+                  }`}
+            </b>
           </div>
         </div>
 
         {/* Dynamic Display Viewport (3D WebGL Three.js or 2D Multi-Res Buffer) */}
-        <div className="relative overflow-hidden rounded-lg bg-black my-2 aspect-square w-[280px] sm:w-[380px] md:w-[420px] max-w-full">
+        <div
+          className={`relative overflow-hidden rounded-lg bg-black my-2 max-w-full transition-all ${
+            arcadeEngineMode === '3D_TRUE_MESH' ||
+            (VIRTUAL_RESOLUTIONS.find((r) => r.id === selectedVirtualResId)?.aspect === '1:1')
+              ? 'aspect-square w-[280px] sm:w-[380px] md:w-[420px]'
+              : 'aspect-video w-[320px] sm:w-[460px] md:w-[520px]'
+          }`}
+        >
           {arcadeEngineMode === '3D_TRUE_MESH' ? (
             <div ref={threeMountRef} className="w-full h-full block cursor-grab active:cursor-grabbing" />
           ) : (
             <canvas
               ref={canvasRef}
-              width={420}
-              height={420}
               className="w-full h-full block"
-              style={{ imageRendering: fidelity <= 128 ? 'pixelated' : 'auto' }}
+              style={{ imageRendering: 'pixelated' }}
             />
           )}
 
@@ -1680,10 +1916,8 @@ export const PixelArcade64x64: React.FC<PixelArcade64x64Props> = ({
               className="absolute inset-0 pointer-events-none opacity-25 mix-blend-screen"
               style={{
                 backgroundImage:
-                  fidelity <= 128
-                    ? 'linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.75) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 255, 0, 0.06))'
-                    : 'linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.45) 50%)',
-                backgroundSize: fidelity <= 128 ? '100% 4px, 6px 100%' : '100% 2px',
+                  'linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.75) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 255, 0, 0.06))',
+                backgroundSize: '100% 4px, 6px 100%',
               }}
             />
           )}
@@ -1759,6 +1993,33 @@ export const PixelArcade64x64: React.FC<PixelArcade64x64Props> = ({
             >
               PAUSE
             </button>
+          </div>
+        </div>
+
+        {/* Real-time Cross-Module Synchronization Status Strip */}
+        <div className="w-full mt-2 p-2 rounded bg-black/60 border border-cyan-500/20 text-[10px] flex flex-col sm:flex-row items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Zap className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+            <span className="text-neutral-300 font-bold">CROSS-MODULE SYNC:</span>
+            <span className="text-cyan-300">
+              Laser: <b style={{ color: perks.laserColor }}>{crossModuleState.lightPreset}</b>
+            </span>
+            <span className="text-amber-300">
+              RPM: <b>{crossModuleState.gearRpm}</b> ({perks.fireRateMultiplier}× Rate)
+            </span>
+          </div>
+          <div className="flex items-center gap-3 text-neutral-400">
+            <span>
+              Flux Dmg: <b className="text-emerald-400">{perks.weaponDamageMultiplier}×</b>
+            </span>
+            <span>
+              Subsystem HP: <b className="text-blue-400">{crossModuleState.subsystemHealth}%</b>
+            </span>
+            {crossModuleState.radarAnomalyDetected && (
+              <span className="px-1.5 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/40 animate-pulse font-bold">
+                RADAR TARGET ACQUIRED
+              </span>
+            )}
           </div>
         </div>
       </div>

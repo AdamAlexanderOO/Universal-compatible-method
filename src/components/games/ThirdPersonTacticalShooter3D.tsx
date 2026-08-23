@@ -16,7 +16,13 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { sounds } from '../../utils/soundEffects';
-import { createLevel4MosaicTexture } from '../../utils/mosaicCharacterRenderer';
+import {
+  createLevel4MosaicTexture,
+  createValkyrieGundam3DMesh,
+  createGoliathBoss3DMesh,
+  createSentinelDroid3DMesh,
+  createCyberDrone3DMesh,
+} from '../../utils/mosaicCharacterRenderer';
 import { InGameModulesAssetOverlay } from './InGameModulesAssetOverlay';
 import {
   GameModuleAsset,
@@ -26,6 +32,17 @@ import {
   getEquippedAssetForSlot,
   createCustomAssetThreeTexture,
 } from '../../utils/customCharacterStore';
+import {
+  subscribeToCrossModuleBus,
+  calculateCrossModulePerks,
+  dispatchGameCombatEvent,
+  getCrossModuleState,
+  cycleCrossModuleLightPreset,
+  toggleCrossModuleOverclock,
+  setCrossModuleEquippedWeapon,
+  boostCrossModuleSubsystem,
+  CrossModuleState,
+} from '../../utils/crossModuleStateBus';
 
 interface ThirdPersonTacticalShooterProps {
   powerOn: boolean;
@@ -51,6 +68,19 @@ export const ThirdPersonTacticalShooter3D: React.FC<ThirdPersonTacticalShooterPr
   const [activeModules, setActiveModules] = useState<GameModuleAsset[]>(() =>
     getModulesForGame('TPS').filter((m) => m.isEquipped)
   );
+
+  // Cross-Module Unified State & Dynamic Perks
+  const [crossModuleState, setCrossModuleState] = useState<CrossModuleState>(getCrossModuleState());
+  const crossModuleStateRef = useRef<CrossModuleState>(getCrossModuleState());
+  const perks = calculateCrossModulePerks(crossModuleState);
+
+  useEffect(() => {
+    const unsub = subscribeToCrossModuleBus((st) => {
+      setCrossModuleState(st);
+      crossModuleStateRef.current = st;
+    });
+    return () => unsub();
+  }, []);
 
   const toggleModuleEquip = (moduleId: string) => {
     setActiveModules((prev) => {
@@ -316,74 +346,10 @@ export const ThirdPersonTacticalShooter3D: React.FC<ThirdPersonTacticalShooterPr
       droneMosaicMat,
     };
 
-    // 3rd Person Mech Hero Model - High Fidelity Level 4 Roman Mosaic Rig (No rough box underlay)
+    // 3rd Person Mech Hero Model - High Fidelity Level 4 Roman Mosaic Rig with Dual-Sided Front & Back Meshes
     const heroGroup = new THREE.Group();
-    const heroTorso = new THREE.Group();
+    const heroTorso = createValkyrieGundam3DMesh({ scale: 1.0 });
     const heroLegs = new THREE.Group();
-
-    // Dual-Sided Level 4 Roman Mosaic Surface Geometry
-    const heroPlaneGeo = new THREE.PlaneGeometry(2.9, 3.4);
-
-    const frontPlate = new THREE.Mesh(heroPlaneGeo, heroMosaicFrontMat);
-    frontPlate.position.set(0, 1.65, 0.02);
-    heroTorso.add(frontPlate);
-
-    const backPlate = new THREE.Mesh(heroPlaneGeo, heroMosaicBackMat);
-    backPlate.position.set(0, 1.65, -0.02);
-    heroTorso.add(backPlate);
-
-    // Glowing Plasma Core on Chest
-    const chestCore = new THREE.Mesh(
-      new THREE.SphereGeometry(0.16, 16, 16),
-      new THREE.MeshBasicMaterial({ color: 0x00f0ff })
-    );
-    chestCore.position.set(0, 1.5, 0.08);
-    heroTorso.add(chestCore);
-
-    // Dual Twin Plasma Thrusters on Mech Back
-    const leftThruster = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.08, 0.12, 0.35, 8),
-      new THREE.MeshBasicMaterial({ color: 0x00f0ff })
-    );
-    leftThruster.rotation.x = Math.PI / 2;
-    leftThruster.position.set(-0.35, 1.52, -0.15);
-    heroTorso.add(leftThruster);
-
-    const rightThruster = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.08, 0.12, 0.35, 8),
-      new THREE.MeshBasicMaterial({ color: 0x00f0ff })
-    );
-    rightThruster.rotation.x = Math.PI / 2;
-    rightThruster.position.set(0.35, 1.52, -0.15);
-    heroTorso.add(rightThruster);
-
-    // Shoulder Laser Cannon with Precision Red/Cyan Aiming Guide
-    const cannon = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.06, 0.06, 0.95, 8),
-      new THREE.MeshStandardMaterial({ color: 0x00f0ff, emissive: 0x003355, metalness: 0.9 })
-    );
-    cannon.rotation.x = Math.PI / 2;
-    cannon.position.set(0.62, 1.7, 0.25);
-    heroTorso.add(cannon);
-
-    // Laser Sight Beam
-    const laserSight = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.015, 0.015, 25, 4),
-      new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.35 })
-    );
-    laserSight.rotation.x = Math.PI / 2;
-    laserSight.position.set(0.62, 1.7, -12.2);
-    heroTorso.add(laserSight);
-
-    // Ground Shadow Projector Disk
-    const shadowDisk = new THREE.Mesh(
-      new THREE.CircleGeometry(1.2, 16),
-      new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.6 })
-    );
-    shadowDisk.rotation.x = -Math.PI / 2;
-    shadowDisk.position.y = 0.02;
-    heroGroup.add(shadowDisk);
-
     heroGroup.add(heroTorso);
     heroGroup.add(heroLegs);
     scene.add(heroGroup);
@@ -493,7 +459,8 @@ export const ThirdPersonTacticalShooter3D: React.FC<ThirdPersonTacticalShooterPr
       if (isWalking) {
         moveVec.normalize();
         g.targetYaw = Math.atan2(moveVec.x, -moveVec.z);
-        g.playerPos.addScaledVector(moveVec, 16 * delta);
+        const heroSpeed = 16 * perks.engineThrustMultiplier;
+        g.playerPos.addScaledVector(moveVec, heroSpeed * delta);
 
         g.walkAnimCycle += delta * 14;
         g.heroTorso.position.y = Math.sin(g.walkAnimCycle) * 0.08;
@@ -528,8 +495,9 @@ export const ThirdPersonTacticalShooter3D: React.FC<ThirdPersonTacticalShooterPr
       g.camera.position.lerp(camTarget.clone().add(camOffset), delta * 8);
       g.camera.lookAt(camTarget.clone().add(new THREE.Vector3(0, 0, -5)));
 
-      // Auto Fire
-      if (g.isShooting && time - g.lastShotTime > 130) {
+      // Auto Fire with Perks
+      const shotCooldown = Math.max(65, 130 / perks.fireRateMultiplier);
+      if (g.isShooting && time - g.lastShotTime > shotCooldown) {
         g.lastShotTime = time;
         spawnTacticalHeroBullet();
         sounds.playLaserPew();
@@ -554,13 +522,25 @@ export const ThirdPersonTacticalShooter3D: React.FC<ThirdPersonTacticalShooterPr
                 spawnSparks(en.mesh.position, 'ORANGE', 14);
                 g.scene.remove(en.mesh);
                 g.enemies.splice(j, 1);
-                g.liveScore += 180;
+                const killPoints = en.type === 'GOLIATH' ? 350 : 180;
+                g.liveScore += killPoints;
                 g.liveHostiles = g.enemies.length;
                 sounds.playPowerUpChime();
+
+                // Dispatch kill event to CrossModule bus
+                dispatchGameCombatEvent({
+                  type: 'ENEMY_KILL',
+                  scoreGained: killPoints,
+                  sourceGame: 'Tactical TPS 3D',
+                });
 
                 if (g.enemies.length === 0) {
                   setGameState('VICTORY');
                   g.isPlaying = false;
+                  dispatchGameCombatEvent({
+                    type: 'BOSS_DEFEATED',
+                    sourceGame: 'Tactical TPS 3D',
+                  });
                 }
               }
               break;
@@ -587,6 +567,14 @@ export const ThirdPersonTacticalShooter3D: React.FC<ThirdPersonTacticalShooterPr
             g.liveHealth = Math.max(0, g.liveHealth - 16);
             spawnSparks(g.playerPos, 'RED', 6);
             sounds.playDamageBlip();
+
+            // Dispatch damage event to Cyber-Deck Subsystems Matrix
+            dispatchGameCombatEvent({
+              type: 'PLAYER_DAMAGE',
+              damageTaken: 16,
+              sourceGame: 'Tactical TPS 3D',
+            });
+
             if (g.liveHealth <= 0) {
               setGameState('GAMEOVER');
               g.isPlaying = false;
@@ -668,17 +656,23 @@ export const ThirdPersonTacticalShooter3D: React.FC<ThirdPersonTacticalShooterPr
     const g = gameRef.current;
     if (!g || g.bullets.length >= 25) return;
 
-    const bMesh = new THREE.Mesh(g.sharedGeos.bulletGeo, g.sharedMats.pBulletMat);
+    const dynamicLaserMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(perks.laserColor || '#00f0ff'),
+    });
+    const bMesh = new THREE.Mesh(g.sharedGeos.bulletGeo, dynamicLaserMat);
     const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), g.playerYaw);
     bMesh.position.copy(g.playerPos).add(new THREE.Vector3(0, 1.4, 0)).add(forward.clone().multiplyScalar(0.8));
     g.scene.add(bMesh);
 
+    const baseDamage = 45;
+    const finalDamage = Math.round(baseDamage * perks.weaponDamageMultiplier);
+
     g.bullets.push({
       mesh: bMesh,
-      velocity: forward.multiplyScalar(120),
+      velocity: forward.multiplyScalar(135 * perks.engineThrustMultiplier),
       life: 2.2,
       isPlayer: true,
-      damage: 45,
+      damage: finalDamage,
     });
   };
 
@@ -830,32 +824,18 @@ export const ThirdPersonTacticalShooter3D: React.FC<ThirdPersonTacticalShooterPr
     g.liveHostiles = numEnemies;
 
     for (let i = 0; i < numEnemies; i++) {
-      const eGroup = new THREE.Group();
       const isGoliath = i === 0 && waveNum >= 2;
+      const isSentinel = !isGoliath && i % 2 === 1;
 
-      // Pure Level 4 Roman Mosaic Enemy Rig (No box/cone overlay underneath)
-      const mosaicMat = isGoliath ? g.sharedMats.goliathMosaicMat : g.sharedMats.droneMosaicMat;
-      const size = isGoliath ? 5.2 : 2.8;
-      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(size, size), mosaicMat);
-      mesh.position.y = isGoliath ? 2.3 : 1.3;
-      eGroup.add(mesh);
-
-      // Emissive Reactor Core Center
-      const core = new THREE.Mesh(
-        new THREE.SphereGeometry(isGoliath ? 0.32 : 0.16, 12, 12),
-        new THREE.MeshBasicMaterial({ color: isGoliath ? 0xff0044 : 0x00f0ff })
-      );
-      core.position.set(0, isGoliath ? 2.3 : 1.3, 0.05);
-      eGroup.add(core);
-
-      // Subtle Hovering Shadow
-      const shadow = new THREE.Mesh(
-        new THREE.CircleGeometry(isGoliath ? 1.6 : 0.8, 12),
-        new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.5 })
-      );
-      shadow.rotation.x = -Math.PI / 2;
-      shadow.position.y = 0.02;
-      eGroup.add(shadow);
+      // High-Fidelity 3D Front & Back Mosaic Mesh Enemy Rig
+      let eGroup: THREE.Group;
+      if (isGoliath) {
+        eGroup = createGoliathBoss3DMesh({ scale: 1.6 });
+      } else if (isSentinel) {
+        eGroup = createSentinelDroid3DMesh({ scale: 1.1 });
+      } else {
+        eGroup = createCyberDrone3DMesh({ scale: 1.0 });
+      }
 
       const angle = (i / numEnemies) * Math.PI * 2;
       const r = 30 + Math.random() * 25;
@@ -864,11 +844,11 @@ export const ThirdPersonTacticalShooter3D: React.FC<ThirdPersonTacticalShooterPr
       g.scene.add(eGroup);
       g.enemies.push({
         mesh: eGroup,
-        health: isGoliath ? 300 : 75,
-        maxHealth: isGoliath ? 300 : 75,
-        speed: isGoliath ? 4.5 : 8.5 + Math.random() * 3,
+        health: isGoliath ? 300 : isSentinel ? 120 : 75,
+        maxHealth: isGoliath ? 300 : isSentinel ? 120 : 75,
+        speed: isGoliath ? 4.5 : isSentinel ? 7.0 : 8.5 + Math.random() * 3,
         shootTimer: 1.2 + Math.random() * 1.5,
-        type: isGoliath ? 'GOLIATH' : 'CRAWLER',
+        type: isGoliath ? 'GOLIATH' : isSentinel ? 'SENTINEL' : 'CRAWLER',
       });
     }
 
@@ -920,6 +900,67 @@ export const ThirdPersonTacticalShooter3D: React.FC<ThirdPersonTacticalShooterPr
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2 pointer-events-auto">
+          {/* Real-time Spectrum Wavelength Modifier Button */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              cycleCrossModuleLightPreset();
+              sounds.playSpectrumLoad();
+            }}
+            className="px-2 py-1 bg-violet-950/80 hover:bg-violet-900 border border-violet-400 text-violet-300 rounded font-bold text-[10px] sm:text-[11px] flex items-center gap-1 shadow-[0_0_10px_rgba(168,85,247,0.3)] active:scale-95 transition-all"
+            title="Cycle Light Protocol & Laser Wavelength Spectrum on the fly"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-violet-400 animate-spin" style={{ animationDuration: '4s' }} />
+            <span className="hidden sm:inline">{crossModuleState.lightPreset.replace('_', ' ')}</span>
+            <span className="sm:hidden">SPECTRUM</span>
+          </button>
+
+          {/* Real-time Holo Gear Overclock Toggle Button */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              toggleCrossModuleOverclock();
+              sounds.playClick(900);
+            }}
+            className={`px-2 py-1 rounded border font-bold text-[10px] sm:text-[11px] flex items-center gap-1 transition-all active:scale-95 ${
+              crossModuleState.isOverclocked
+                ? 'bg-amber-500 text-black border-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.6)] animate-pulse'
+                : 'bg-white/5 border-white/20 text-neutral-300 hover:text-white'
+            }`}
+            title="Toggle Hologram Gear RPM Overclock (+45% Fire Rate & Speed)"
+          >
+            <Zap className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">OVERCLOCK ({crossModuleState.gearRpm.toFixed(0)} RPM)</span>
+            <span className="sm:hidden">OC</span>
+          </button>
+
+          {/* Quick Subsystem Shield Injection */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              boostCrossModuleSubsystem('SHIELD');
+              if (gameRef.current) {
+                gameRef.current.liveHealth = Math.min(100, gameRef.current.liveHealth + 25);
+                gameRef.current.liveBarrier = Math.min(100, gameRef.current.liveBarrier + 50);
+              }
+              setHealth((h) => Math.min(100, h + 25));
+              setBarrierEnergy((b) => Math.min(100, b + 50));
+              sounds.playPowerUpChime();
+            }}
+            className="px-2 py-1 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-400 text-emerald-300 rounded font-bold text-[10px] sm:text-[11px] flex items-center gap-1 shadow-[0_0_10px_rgba(16,185,129,0.3)] active:scale-95 transition-all"
+            title="Inject Deck Nutrients to Recharge Shield Matrix (+25 HP, +50 Barrier)"
+          >
+            <Shield className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="hidden sm:inline">SHIELD BOOST</span>
+            <span className="sm:hidden">+SHIELD</span>
+          </button>
+
           {/* Tactical 2D/3D Modules Asset Deck Button */}
           <button
             type="button"

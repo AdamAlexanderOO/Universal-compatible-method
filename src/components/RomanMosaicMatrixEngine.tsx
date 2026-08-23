@@ -37,6 +37,7 @@ import { sounds } from '../utils/soundEffects';
 import { haptics } from '../utils/haptics';
 import { AppThemeConfig } from '../utils/theme';
 import { ArmorAssemblyModal } from './ArmorAssemblyModal';
+import { MultiAngle3DCharacterStudio } from './MultiAngle3DCharacterStudio';
 import {
   applyConvolutionFilter,
   SHARPEN_KERNEL,
@@ -293,7 +294,7 @@ export const RomanMosaicMatrixEngine: React.FC<RomanMosaicEngineProps> = ({
   const [similarityScore, setSimilarityScore] = useState<number>(96.4);
   const [recognizedCategory, setRecognizedCategory] = useState<string>('Playable TPS Operative');
   const [customImageSrc, setCustomImageSrc] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'MOSAIC_VIEW' | 'DRAW_STUDIO' | 'CIPHER_HIERARCHY'>('MOSAIC_VIEW');
+  const [activeTab, setActiveTab] = useState<'MOSAIC_VIEW' | '3D_STUDIO' | 'DRAW_STUDIO' | 'CIPHER_HIERARCHY'>('MOSAIC_VIEW');
   const [cipherHierarchy, setCipherHierarchy] = useState<{ scale300: string; scale200: string; scale150: string }>({
     scale300: '0xROMAN_MACRO // TESSERAE_BASE_300_BLOCKS [36px Grid]',
     scale200: '0xCYPHER_MESO // VECTOR_INTERPOLATION_200_LINES [18px Grid]',
@@ -1299,6 +1300,23 @@ export const RomanMosaicMatrixEngine: React.FC<RomanMosaicEngineProps> = ({
           <button
             type="button"
             onClick={() => {
+              sounds.playClick(680);
+              haptics.trigger('click');
+              setActiveTab('3D_STUDIO');
+            }}
+            className={`px-2.5 py-1 rounded text-xs font-mono font-bold flex items-center gap-1 transition-all ${
+              activeTab === '3D_STUDIO' ? 'text-white' : 'text-cyan-300 hover:text-white bg-cyan-950/40 border border-cyan-500/30'
+            }`}
+            style={{
+              backgroundColor: activeTab === '3D_STUDIO' ? theme.primary : undefined,
+            }}
+          >
+            <Box className="w-3.5 h-3.5" />
+            <span>3D Multi-Angle</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
               sounds.playClick(700);
               haptics.trigger('click');
               setActiveTab('DRAW_STUDIO');
@@ -1432,6 +1450,19 @@ export const RomanMosaicMatrixEngine: React.FC<RomanMosaicEngineProps> = ({
 
                   {/* 3D Controls Toolbar */}
                   <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-black/85 backdrop-blur-md p-1.5 rounded-lg border border-cyan-500/30 font-mono text-xs z-10 shadow-xl">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        sounds.playClick(720);
+                        setActiveTab('3D_STUDIO');
+                      }}
+                      className="px-2.5 py-1 rounded text-[11px] font-bold flex items-center gap-1.5 border bg-cyan-500/20 text-cyan-300 border-cyan-400 hover:bg-cyan-500/30 transition-all shadow-[0_0_8px_rgba(0,240,255,0.3)]"
+                      title="Open in Advanced Multi-Angle 3D Studio"
+                    >
+                      <Box className="w-3.5 h-3.5" />
+                      <span>3D Studio</span>
+                    </button>
+
                     <button
                       type="button"
                       onClick={handleToggleExplosion}
@@ -2211,6 +2242,17 @@ export const RomanMosaicMatrixEngine: React.FC<RomanMosaicEngineProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* 3D MULTI-ANGLE CHARACTER STUDIO TAB */}
+      {activeTab === '3D_STUDIO' && (
+        <MultiAngle3DCharacterStudio
+          theme={theme}
+          powerOn={powerOn}
+          onEquipSuccess={(slot, name) => {
+            sounds.playPowerUp();
+          }}
+        />
       )}
 
       {/* 300/200/150 CYPHER HIERARCHY TAB */}

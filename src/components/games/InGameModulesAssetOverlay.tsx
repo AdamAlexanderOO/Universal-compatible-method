@@ -59,6 +59,7 @@ import {
   MosaicTileStyle,
 } from '../../utils/customCharacterStore';
 import { createLevel4MosaicTexture } from '../../utils/mosaicCharacterRenderer';
+import { updateCrossModuleState } from '../../utils/crossModuleStateBus';
 import { sounds } from '../../utils/soundEffects';
 import { haptics } from '../../utils/haptics';
 
@@ -250,6 +251,12 @@ export const InGameModulesAssetOverlay: React.FC<InGameModulesAssetOverlayProps>
     setActiveCharacterEquipment(updates);
     setActiveEquip(getActiveCharacterEquipment());
     setTextureSourceMode('CUSTOM_TEXTURE');
+
+    updateCrossModuleState({
+      tesseraeTileStyle: assetToDeploy.settings?.tileStyle || 'ROMAN_STONE',
+      lastCombatEvent: `Custom Mosaic Asset [${assetToDeploy.name}] deployed to ${targetSlot} engine.`,
+    });
+
     sounds.playClick(1000);
     haptics.trigger('heavy');
   };

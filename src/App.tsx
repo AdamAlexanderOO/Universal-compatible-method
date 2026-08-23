@@ -63,6 +63,12 @@ import { SystemDiagnosticsPanel } from './components/SystemDiagnosticsPanel';
 import { sounds } from './utils/soundEffects';
 import { haptics } from './utils/haptics';
 import { AppThemeId, AppThemeConfig, APP_THEMES } from './utils/theme';
+import {
+  subscribeToCrossModuleBus,
+  updateCrossModuleState,
+  getCrossModuleState,
+  CrossModuleState,
+} from './utils/crossModuleStateBus';
 
 const LIGHT_PRESETS: Record<LightPreset, LightProtocolData> = {
   AURORA_VIOLET: {
@@ -273,9 +279,47 @@ export default function App() {
     const nextIdx = (keys.indexOf(currentLightPreset) + 1) % keys.length;
     const nextPreset = keys[nextIdx];
     setCurrentLightPreset(nextPreset);
+    updateCrossModuleState({
+      lightPreset: nextPreset,
+      primaryColor: LIGHT_PRESETS[nextPreset].primaryColor,
+      glowColor: LIGHT_PRESETS[nextPreset].glowColor,
+      wavelengthTHz: LIGHT_PRESETS[nextPreset].wavelengthTHz,
+      energyOutputMW: LIGHT_PRESETS[nextPreset].energyOutputMW,
+    });
     sounds.playSpectrumLoad();
     addLog(`Light-Protocol spectrum shifted to ${LIGHT_PRESETS[nextPreset].name}.`, 'SUCCESS', 'LIGHT_PROTOCOL');
   };
+
+  // Sync state changes from Deck to CrossModuleStateBus
+  useEffect(() => {
+    updateCrossModuleState({
+      lightPreset: currentLightPreset,
+      fluxFrequency,
+      isOverclocked: overclockEnabled,
+      gearRpm: (fluxFrequency * 18.5),
+      subsystems,
+      radarAnomalies: telemetry.radarAnomalies,
+      activeRadarTarget: selectedAnomaly,
+    });
+  }, [currentLightPreset, fluxFrequency, overclockEnabled, subsystems, telemetry.radarAnomalies, selectedAnomaly]);
+
+  // Subscribe to in-game combat and module bus events
+  useEffect(() => {
+    let prevLog = '';
+    const unsub = subscribeToCrossModuleBus((busState) => {
+      if (busState.lastCombatEvent && busState.lastCombatEvent !== prevLog) {
+        prevLog = busState.lastCombatEvent;
+        addLog(busState.lastCombatEvent, 'INFO', 'SYSTEM');
+      }
+      if (busState.subsystems && busState.subsystems.health.current !== subsystems.health.current) {
+        setSubsystems((prev) => ({
+          ...prev,
+          health: busState.subsystems.health,
+        }));
+      }
+    });
+    return () => unsub();
+  }, []);
 
   // Run Simulation
   const handleRunSimulation = async (mode: SimulationMode) => {

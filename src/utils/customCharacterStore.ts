@@ -335,6 +335,23 @@ export function setActiveCharacterEquipment(equip: Partial<ActiveCharacterEquipm
   notifyListeners();
 }
 
+export function equipAssetToSlot(assetId: string, slot: CharacterTargetSlot): void {
+  if (slot === 'FPS_WEAPON') setActiveCharacterEquipment({ fpsWeaponAssetId: assetId });
+  else if (slot === 'TPS_MECH') setActiveCharacterEquipment({ tpsMechAssetId: assetId });
+  else if (slot === 'SPACE_STARFIGHTER') setActiveCharacterEquipment({ spaceShipAssetId: assetId });
+  else if (slot === 'PIXEL_SPRITE') setActiveCharacterEquipment({ pixelArcadeAssetId: assetId });
+  else if (slot === 'ARENA_MURAL') setActiveCharacterEquipment({ arenaMuralAssetId: assetId });
+  else if (slot === 'ALL') {
+    setActiveCharacterEquipment({
+      fpsWeaponAssetId: assetId,
+      tpsMechAssetId: assetId,
+      spaceShipAssetId: assetId,
+      pixelArcadeAssetId: assetId,
+      arenaMuralAssetId: assetId,
+    });
+  }
+}
+
 export function getEquippedAssetForSlot(
   slot: 'FPS_WEAPON' | 'TPS_MECH' | 'SPACE_STARFIGHTER' | 'PIXEL_SPRITE' | 'ARENA_MURAL'
 ): CustomCharacterAsset | null {

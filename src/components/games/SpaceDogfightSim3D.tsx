@@ -24,7 +24,13 @@ import {
   Box,
 } from 'lucide-react';
 import { sounds } from '../../utils/soundEffects';
-import { createLevel4MosaicTexture } from '../../utils/mosaicCharacterRenderer';
+import {
+  createLevel4MosaicTexture,
+  createStarfighterHero3DMesh,
+  createCruiserBoss3DMesh,
+  createStealthCorvette3DMesh,
+  createCyberDrone3DMesh,
+} from '../../utils/mosaicCharacterRenderer';
 import { InGameModulesAssetOverlay } from './InGameModulesAssetOverlay';
 import {
   GameModuleAsset,
@@ -34,6 +40,13 @@ import {
   getEquippedAssetForSlot,
   createCustomAssetThreeTexture,
 } from '../../utils/customCharacterStore';
+import {
+  subscribeToCrossModuleBus,
+  calculateCrossModulePerks,
+  dispatchGameCombatEvent,
+  getCrossModuleState,
+  CrossModuleState,
+} from '../../utils/crossModuleStateBus';
 
 interface SpaceDogfightSimProps {
   powerOn: boolean;
@@ -60,6 +73,15 @@ export const SpaceDogfightSim3D: React.FC<SpaceDogfightSimProps> = ({
   const [invertPitch, setInvertPitch] = useState<boolean>(false);
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
   const [enemiesRemaining, setEnemiesRemaining] = useState<number>(6);
+
+  // Cross-Module Unified State
+  const [crossModuleState, setCrossModuleState] = useState<CrossModuleState>(getCrossModuleState());
+  const perks = calculateCrossModulePerks(crossModuleState);
+
+  useEffect(() => {
+    const unsub = subscribeToCrossModuleBus((st) => setCrossModuleState(st));
+    return () => unsub();
+  }, []);
 
   // Roman Mosaic Building Overlay & Fidelity Scanner State
   const [mosaicOverlayActive, setMosaicOverlayActive] = useState<boolean>(true);
@@ -302,57 +324,8 @@ export const SpaceDogfightSim3D: React.FC<SpaceDogfightSimProps> = ({
       cruiserMosaicMat,
     };
 
-    // Player Starship Model (3rd Person)
-    const playerShip = new THREE.Group();
-    const bodyGeo = new THREE.ConeGeometry(1.2, 5, 8);
-    bodyGeo.rotateX(Math.PI / 2);
-    const body = new THREE.Mesh(
-      bodyGeo,
-      new THREE.MeshStandardMaterial({
-        map: starfighterMosaic,
-        color: 0x88ccff,
-        roughness: 0.2,
-        metalness: 0.85,
-      })
-    );
-    playerShip.add(body);
-
-    const cockpitGeo = new THREE.SphereGeometry(0.7, 12, 8);
-    cockpitGeo.scale(0.8, 0.6, 1.8);
-    const cockpit = new THREE.Mesh(
-      cockpitGeo,
-      new THREE.MeshStandardMaterial({ color: 0x00f0ff, emissive: 0x0088cc, roughness: 0.1, metalness: 0.9 })
-    );
-    cockpit.position.set(0, 0.4, 0.2);
-    playerShip.add(cockpit);
-
-    const wingGeo = new THREE.BoxGeometry(4.5, 0.1, 1.8);
-    const wingMat = new THREE.MeshStandardMaterial({
-      map: starfighterMosaic,
-      color: 0xaaccff,
-      metalness: 0.9,
-      roughness: 0.3,
-    });
-    const wings = new THREE.Mesh(wingGeo, wingMat);
-    wings.position.set(0, 0, 0);
-    playerShip.add(wings);
-
-    // Glowing engine thruster lights
-    const thrusterLeft = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.2, 0.3, 0.6, 8),
-      new THREE.MeshBasicMaterial({ color: 0x00f0ff })
-    );
-    thrusterLeft.rotation.x = Math.PI / 2;
-    thrusterLeft.position.set(-0.8, 0, 2.5);
-    playerShip.add(thrusterLeft);
-
-    const thrusterRight = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.2, 0.3, 0.6, 8),
-      new THREE.MeshBasicMaterial({ color: 0x00f0ff })
-    );
-    thrusterRight.rotation.x = Math.PI / 2;
-    thrusterRight.position.set(0.8, 0, 2.5);
-    playerShip.add(thrusterRight);
+    // Player Starship Model (3rd Person with Full Front & Back 3D Mesh)
+    const playerShip = createStarfighterHero3DMesh({ scale: 1.0 });
 
     // Celestial Roman Cyber Mosaic Monoliths & Relic Gateways in Deep Space
     const spaceMuralMosaic1 = createLevel4MosaicTexture('ROMAN_CYBER_MOSAIC', {
@@ -608,7 +581,9 @@ export const SpaceDogfightSim3D: React.FC<SpaceDogfightSimProps> = ({
         let pitch = 0;
         let yaw = 0;
         let roll = 0;
-        const forwardThrottle = g.isBoosting ? 85 : 32;
+        // Forward throttle with Gear & Aurora engine multipliers
+        const baseSpeed = g.isBoosting ? 85 : 32;
+        const forwardThrottle = baseSpeed * perks.engineThrustMultiplier;
 
         const pitchMultiplier = g.invertPitch ? -1 : 1;
 
@@ -642,9 +617,10 @@ export const SpaceDogfightSim3D: React.FC<SpaceDogfightSimProps> = ({
         const forwardVector = new THREE.Vector3(0, 0, -1).applyEuler(g.shipRot);
         g.shipPos.addScaledVector(forwardVector, forwardThrottle * delta);
         g.playerShip.position.copy(g.shipPos);
+        (g.playerShip as any).setBoost?.(g.isBoosting);
 
-        // Regenerate shield
-        g.liveShield = Math.min(100, g.liveShield + delta * 3.5);
+        // Regenerate shield with cross-module shield boost
+        g.liveShield = Math.min(100, g.liveShield + delta * 3.5 * perks.shieldRechargeRate);
 
         // Camera Placement
         if (g.viewMode === 'COCKPIT') {
@@ -662,8 +638,9 @@ export const SpaceDogfightSim3D: React.FC<SpaceDogfightSimProps> = ({
           g.camera.lookAt(g.shipPos.clone().add(forwardVector.clone().multiplyScalar(30)));
         }
 
-        // Fire Laser
-        if (g.isShooting && time - g.lastShotTime > 130) {
+        // Fire Laser with Gear RPM Fire Rate Scaling
+        const shotCooldown = Math.max(65, 130 / perks.fireRateMultiplier);
+        if (g.isShooting && time - g.lastShotTime > shotCooldown) {
           g.lastShotTime = time;
           spawnPooledLaser(true, forwardVector);
           sounds.playLaserPew();
@@ -679,7 +656,8 @@ export const SpaceDogfightSim3D: React.FC<SpaceDogfightSimProps> = ({
             for (let j = g.enemies.length - 1; j >= 0; j--) {
               const e = g.enemies[j];
               if (l.mesh.position.distanceTo(e.mesh.position) < 4.5) {
-                e.health -= 35;
+                const dmg = Math.round(35 * perks.weaponDamageMultiplier);
+                e.health -= dmg;
                 spawnSparks(l.mesh.position, 'CYAN', 4);
                 sounds.playDamageBlip();
                 l.life = 0;
@@ -688,13 +666,25 @@ export const SpaceDogfightSim3D: React.FC<SpaceDogfightSimProps> = ({
                   spawnSparks(e.mesh.position, 'ORANGE', 14);
                   g.scene.remove(e.mesh);
                   g.enemies.splice(j, 1);
-                  g.liveScore += 150;
+                  const killScore = e.type === 'CRUISER' ? 500 : 150;
+                  g.liveScore += killScore;
                   g.liveEnemiesCount = g.enemies.length;
                   sounds.playPowerUpChime();
+
+                  // Broadcast event to entire Cyber-Deck Cross-Module Bus
+                  dispatchGameCombatEvent({
+                    type: 'ENEMY_KILL',
+                    scoreGained: killScore,
+                    sourceGame: '3D Space Dogfight Sim',
+                  });
 
                   if (g.enemies.length === 0) {
                     setGameState('VICTORY');
                     g.isPlaying = false;
+                    dispatchGameCombatEvent({
+                      type: 'BOSS_DEFEATED',
+                      sourceGame: '3D Space Dogfight Sim',
+                    });
                   }
                 }
                 break;
@@ -705,6 +695,11 @@ export const SpaceDogfightSim3D: React.FC<SpaceDogfightSimProps> = ({
               l.life = 0;
               spawnSparks(g.shipPos, 'RED', 6);
               sounds.playDamageBlip();
+              dispatchGameCombatEvent({
+                type: 'PLAYER_DAMAGE',
+                damageTaken: 10,
+                sourceGame: '3D Space Dogfight Sim',
+              });
 
               if (g.liveShield > 0) {
                 g.liveShield = Math.max(0, g.liveShield - 18);
@@ -957,22 +952,18 @@ export const SpaceDogfightSim3D: React.FC<SpaceDogfightSimProps> = ({
     g.liveEnemiesCount = numEnemies;
 
     for (let i = 0; i < numEnemies; i++) {
-      const eGroup = new THREE.Group();
       const isCruiser = i === 0 && waveNum >= 2;
+      const isCorvette = !isCruiser && i % 2 === 1;
 
-      // Pure Level 4 Roman Mosaic Space Enemy Rig (No box/octahedron underlay)
-      const mosaicMat = isCruiser ? g.sharedMats.cruiserMosaicMat : g.sharedMats.droneMosaicMat;
-      const size = isCruiser ? 16 : 6.0;
-      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(size, size), mosaicMat);
-      eGroup.add(mesh);
-
-      // Glowing Reactor Core
-      const core = new THREE.Mesh(
-        new THREE.SphereGeometry(isCruiser ? 1.2 : 0.4, 12, 12),
-        new THREE.MeshBasicMaterial({ color: isCruiser ? 0xff0055 : 0x00ffff })
-      );
-      core.position.set(0, 0, 0.2);
-      eGroup.add(core);
+      // High-Fidelity 3D Front & Back Mosaic Mesh Enemy Rig
+      let eGroup: THREE.Group;
+      if (isCruiser) {
+        eGroup = createCruiserBoss3DMesh({ scale: 2.2 });
+      } else if (isCorvette) {
+        eGroup = createStealthCorvette3DMesh({ scale: 1.4 });
+      } else {
+        eGroup = createCyberDrone3DMesh({ scale: 1.2 });
+      }
 
       const angle = (i / numEnemies) * Math.PI * 2;
       const r = 120 + Math.random() * 80;
@@ -985,11 +976,11 @@ export const SpaceDogfightSim3D: React.FC<SpaceDogfightSimProps> = ({
       g.scene.add(eGroup);
       g.enemies.push({
         mesh: eGroup,
-        health: isCruiser ? 300 : 70,
-        maxHealth: isCruiser ? 300 : 70,
-        speed: isCruiser ? 10 : 18 + Math.random() * 8,
+        health: isCruiser ? 300 : isCorvette ? 140 : 70,
+        maxHealth: isCruiser ? 300 : isCorvette ? 140 : 70,
+        speed: isCruiser ? 10 : isCorvette ? 22 : 18 + Math.random() * 8,
         shootTimer: 1.5 + Math.random() * 2,
-        type: isCruiser ? 'CRUISER' : 'DRONE',
+        type: isCruiser ? 'CRUISER' : isCorvette ? 'STEALTH_CORVETTE' : 'DRONE',
         turnSeed: Math.random() * 10,
       });
     }

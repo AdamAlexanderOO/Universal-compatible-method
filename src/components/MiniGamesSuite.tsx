@@ -26,6 +26,17 @@ import {
 } from 'lucide-react';
 import { sounds } from '../utils/soundEffects';
 import { haptics } from '../utils/haptics';
+import {
+  subscribeToCrossModuleBus,
+  calculateCrossModulePerks,
+  dispatchGameCombatEvent,
+  cycleCrossModuleLightPreset,
+  toggleCrossModuleOverclock,
+  boostCrossModuleSubsystem,
+  setCrossModuleEquippedWeapon,
+  CrossModuleState,
+  getCrossModuleState,
+} from '../utils/crossModuleStateBus';
 import { SpaceDogfightSim3D } from './games/SpaceDogfightSim3D';
 import { CyberFpsShooter3D } from './games/CyberFpsShooter3D';
 import { ThirdPersonTacticalShooter3D } from './games/ThirdPersonTacticalShooter3D';
@@ -62,6 +73,15 @@ export const MiniGamesSuite: React.FC<{
   const [activeGame, setActiveGame] = useState<GameMode>('SPACE_SIM_3D');
   const [internalFullscreen, setInternalFullscreen] = useState<boolean>(false);
   const [selectedLoadoutCategory, setSelectedLoadoutCategory] = useState<'STARFIGHTER' | 'MECH' | 'WEAPON' | 'PILOT'>('STARFIGHTER');
+
+  // CrossModule State & Subscription
+  const [crossModuleState, setCrossModuleState] = useState<CrossModuleState>(getCrossModuleState());
+  useEffect(() => {
+    const unsub = subscribeToCrossModuleBus((st) => {
+      setCrossModuleState(st);
+    });
+    return () => unsub();
+  }, []);
 
   const isSuiteFullscreen = externalFullscreen !== undefined ? externalFullscreen : internalFullscreen;
 
@@ -283,6 +303,39 @@ export const MiniGamesSuite: React.FC<{
             }`}
           >
             Radar
+          </button>
+
+          {/* Cross-Module Live Controls */}
+          <button
+            type="button"
+            onClick={() => {
+              sounds.playSpectrumLoad();
+              cycleCrossModuleLightPreset();
+            }}
+            className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded transition-all bg-violet-950/80 hover:bg-violet-900 border border-violet-400 text-violet-300 flex items-center gap-1 shadow-[0_0_8px_rgba(168,85,247,0.3)]"
+            title="Cycle Hardware Spectrum Preset"
+          >
+            <Sparkles className="w-3 h-3 text-violet-400" />
+            <span className="hidden xl:inline">{crossModuleState.lightPreset.replace('_', ' ')}</span>
+            <span className="xl:hidden">SPECTRUM</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              sounds.playClick(850);
+              toggleCrossModuleOverclock();
+            }}
+            className={`px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded transition-all flex items-center gap-1 border ${
+              crossModuleState.isOverclocked
+                ? 'bg-amber-500 text-black border-amber-300 shadow-[0_0_10px_rgba(245,158,11,0.5)] animate-pulse'
+                : 'text-neutral-400 hover:text-white bg-white/5 border-white/15'
+            }`}
+            title="Toggle Hologram Gear RPM Overclock (+45% Game Speed)"
+          >
+            <Zap className="w-3 h-3" />
+            <span className="hidden xl:inline">OC ({crossModuleState.gearRpm.toFixed(0)} RPM)</span>
+            <span className="xl:hidden">OC</span>
           </button>
 
           {/* Suite Dedicated Full-Screen Toggle */}

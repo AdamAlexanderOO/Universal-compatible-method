@@ -16,7 +16,12 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { sounds } from '../../utils/soundEffects';
-import { createLevel4MosaicTexture } from '../../utils/mosaicCharacterRenderer';
+import {
+  createLevel4MosaicTexture,
+  createGoliathBoss3DMesh,
+  createSentinelDroid3DMesh,
+  createCyberDrone3DMesh,
+} from '../../utils/mosaicCharacterRenderer';
 import { InGameModulesAssetOverlay } from './InGameModulesAssetOverlay';
 import {
   GameModuleAsset,
@@ -27,6 +32,17 @@ import {
   createCustomAssetThreeTexture,
   subscribeToCustomAssetChanges,
 } from '../../utils/customCharacterStore';
+import {
+  subscribeToCrossModuleBus,
+  calculateCrossModulePerks,
+  dispatchGameCombatEvent,
+  getCrossModuleState,
+  cycleCrossModuleLightPreset,
+  toggleCrossModuleOverclock,
+  setCrossModuleEquippedWeapon,
+  boostCrossModuleSubsystem,
+  CrossModuleState,
+} from '../../utils/crossModuleStateBus';
 
 interface CyberFpsShooterProps {
   powerOn: boolean;
@@ -55,6 +71,19 @@ export const CyberFpsShooter3D: React.FC<CyberFpsShooterProps> = ({
   const [activeModules, setActiveModules] = useState<GameModuleAsset[]>(() =>
     getModulesForGame('FPS').filter((m) => m.isEquipped)
   );
+
+  // Cross-Module Unified State & Dynamic Perks
+  const [crossModuleState, setCrossModuleState] = useState<CrossModuleState>(getCrossModuleState());
+  const crossModuleStateRef = useRef<CrossModuleState>(getCrossModuleState());
+  const perks = calculateCrossModulePerks(crossModuleState);
+
+  useEffect(() => {
+    const unsub = subscribeToCrossModuleBus((st) => {
+      setCrossModuleState(st);
+      crossModuleStateRef.current = st;
+    });
+    return () => unsub();
+  }, []);
 
   const toggleModuleEquip = (moduleId: string) => {
     setActiveModules((prev) => {
@@ -477,8 +506,9 @@ export const CyberFpsShooter3D: React.FC<CyberFpsShooterProps> = ({
       if (moveVec.lengthSq() > 0) {
         moveVec.normalize();
         moveVec.applyAxisAngle(new THREE.Vector3(0, 1, 0), g.cameraYaw);
-        g.playerPos.x += moveVec.x * 16 * rawDelta;
-        g.playerPos.z += moveVec.z * 16 * rawDelta;
+        const thrustSpeed = 16 * perks.engineThrustMultiplier;
+        g.playerPos.x += moveVec.x * thrustSpeed * rawDelta;
+        g.playerPos.z += moveVec.z * thrustSpeed * rawDelta;
 
         // Weapon Bobbing
         g.weaponGroup.position.y = -0.3 + Math.sin(time * 0.012) * 0.02;
@@ -490,8 +520,9 @@ export const CyberFpsShooter3D: React.FC<CyberFpsShooterProps> = ({
       g.playerPos.z = Math.max(-55, Math.min(55, g.playerPos.z));
       camera.position.copy(g.playerPos);
 
-      // Weapon Fire
-      if (g.isShooting && time - g.lastShotTime > 120 && g.liveAmmo > 0 && !g.isReloadingInternal) {
+      // Weapon Fire (RPM fire rate scaled by gear ratio and light harmonics)
+      const shotCooldown = Math.max(60, 120 / perks.fireRateMultiplier);
+      if (g.isShooting && time - g.lastShotTime > shotCooldown && g.liveAmmo > 0 && !g.isReloadingInternal) {
         g.lastShotTime = time;
         g.liveAmmo -= 1;
         spawnPlayerBullet();
@@ -528,13 +559,25 @@ export const CyberFpsShooter3D: React.FC<CyberFpsShooterProps> = ({
                 spawnSparks(en.mesh.position, 'ORANGE', 12);
                 g.scene.remove(en.mesh);
                 g.enemies.splice(j, 1);
-                g.liveScore += 120;
+                const killPoints = en.type === 'HEAVY_DROID' ? 300 : 120;
+                g.liveScore += killPoints;
                 g.liveEnemiesCount = g.enemies.length;
                 sounds.playPowerUpChime();
+
+                // Broadcast enemy kill event to CrossModule Bus
+                dispatchGameCombatEvent({
+                  type: 'ENEMY_KILL',
+                  scoreGained: killPoints,
+                  sourceGame: 'Cyber FPS 3D',
+                });
 
                 if (g.enemies.length === 0) {
                   setGameState('VICTORY');
                   g.isPlaying = false;
+                  dispatchGameCombatEvent({
+                    type: 'BOSS_DEFEATED',
+                    sourceGame: 'Cyber FPS 3D',
+                  });
                 }
               }
               break;
@@ -546,6 +589,13 @@ export const CyberFpsShooter3D: React.FC<CyberFpsShooterProps> = ({
             g.liveHealth = Math.max(0, g.liveHealth - 12);
             spawnSparks(g.playerPos, 'RED', 6);
             sounds.playDamageBlip();
+
+            // Broadcast player damage to Cyber-Deck Subsystems Matrix
+            dispatchGameCombatEvent({
+              type: 'PLAYER_DAMAGE',
+              damageTaken: 12,
+              sourceGame: 'Cyber FPS 3D',
+            });
 
             if (g.liveHealth <= 0) {
               setGameState('GAMEOVER');
@@ -612,17 +662,23 @@ export const CyberFpsShooter3D: React.FC<CyberFpsShooterProps> = ({
     const g = engineRef.current;
     if (!g || g.bullets.length >= 35) return;
 
-    const bMesh = new THREE.Mesh(g.sharedGeos.bulletGeo, g.sharedMats.pBulletMat);
+    const dynamicLaserMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(perks.laserColor || '#00f0ff'),
+    });
+    const bMesh = new THREE.Mesh(g.sharedGeos.bulletGeo, dynamicLaserMat);
     const dir = new THREE.Vector3(0, 0, -1).applyEuler(g.camera.rotation);
     bMesh.position.copy(g.playerPos).add(dir.clone().multiplyScalar(0.8));
     g.scene.add(bMesh);
 
+    const baseDamage = 40;
+    const finalDamage = Math.round(baseDamage * perks.weaponDamageMultiplier);
+
     g.bullets.push({
       mesh: bMesh,
-      velocity: dir.multiplyScalar(150),
+      velocity: dir.multiplyScalar(160 * perks.engineThrustMultiplier),
       life: 2.0,
       isPlayer: true,
-      damage: 40,
+      damage: finalDamage,
     });
   };
 
@@ -738,32 +794,18 @@ export const CyberFpsShooter3D: React.FC<CyberFpsShooterProps> = ({
     g.liveEnemiesCount = numEnemies;
 
     for (let i = 0; i < numEnemies; i++) {
-      const eGroup = new THREE.Group();
       const isHeavy = i === 0 && waveNum >= 2;
+      const isSentinel = !isHeavy && i % 2 === 1;
 
-      // Pure Level 4 Roman Mosaic Enemy Rig (No box/octahedron underlay)
-      const mosaicMat = isHeavy ? g.sharedMats.heavyMosaicMat : g.sharedMats.sentinelMosaicMat;
-      const size = isHeavy ? 4.8 : 2.6;
-      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(size, size), mosaicMat);
-      mesh.position.y = isHeavy ? 1.5 : 1.6;
-      eGroup.add(mesh);
-
-      // Glowing Reactor Core
-      const core = new THREE.Mesh(
-        new THREE.SphereGeometry(isHeavy ? 0.28 : 0.14, 12, 12),
-        new THREE.MeshBasicMaterial({ color: isHeavy ? 0xff0044 : 0xd946ef })
-      );
-      core.position.set(0, isHeavy ? 1.5 : 1.6, 0.04);
-      eGroup.add(core);
-
-      // Ground Shadow
-      const shadow = new THREE.Mesh(
-        new THREE.CircleGeometry(isHeavy ? 1.4 : 0.7, 12),
-        new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.5 })
-      );
-      shadow.rotation.x = -Math.PI / 2;
-      shadow.position.y = 0.02;
-      eGroup.add(shadow);
+      // High-Fidelity 3D Front & Back Mosaic Mesh Enemy Rig
+      let eGroup: THREE.Group;
+      if (isHeavy) {
+        eGroup = createGoliathBoss3DMesh({ scale: 1.5 });
+      } else if (isSentinel) {
+        eGroup = createSentinelDroid3DMesh({ scale: 1.1 });
+      } else {
+        eGroup = createCyberDrone3DMesh({ scale: 1.0 });
+      }
 
       const angle = (i / numEnemies) * Math.PI * 2;
       const r = 25 + Math.random() * 20;
@@ -772,11 +814,11 @@ export const CyberFpsShooter3D: React.FC<CyberFpsShooterProps> = ({
       g.scene.add(eGroup);
       g.enemies.push({
         mesh: eGroup,
-        health: isHeavy ? 200 : 60,
-        maxHealth: isHeavy ? 200 : 60,
-        speed: isHeavy ? 4.5 : 7.5 + Math.random() * 3,
+        health: isHeavy ? 200 : isSentinel ? 100 : 60,
+        maxHealth: isHeavy ? 200 : isSentinel ? 100 : 60,
+        speed: isHeavy ? 4.5 : isSentinel ? 6.5 : 7.5 + Math.random() * 3,
         shootTimer: 1.2 + Math.random() * 1.5,
-        type: isHeavy ? 'HEAVY_DROID' : 'CYBER_DRONE',
+        type: isHeavy ? 'HEAVY_DROID' : isSentinel ? 'SENTINEL' : 'CYBER_DRONE',
         heightOffset: isHeavy ? 1.4 : 1.6,
       });
     }
@@ -840,6 +882,63 @@ export const CyberFpsShooter3D: React.FC<CyberFpsShooterProps> = ({
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2 pointer-events-auto">
+          {/* Real-time Spectrum Wavelength Modifier Button */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              cycleCrossModuleLightPreset();
+              sounds.playSpectrumLoad();
+            }}
+            className="px-2 py-1 bg-violet-950/80 hover:bg-violet-900 border border-violet-400 text-violet-300 rounded font-bold text-[10px] sm:text-[11px] flex items-center gap-1 shadow-[0_0_10px_rgba(168,85,247,0.3)] active:scale-95 transition-all"
+            title="Cycle Light Protocol & Laser Wavelength Spectrum on the fly"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-violet-400 animate-spin" style={{ animationDuration: '4s' }} />
+            <span className="hidden sm:inline">{crossModuleState.lightPreset.replace('_', ' ')}</span>
+            <span className="sm:hidden">SPECTRUM</span>
+          </button>
+
+          {/* Real-time Holo Gear Overclock Toggle Button */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              toggleCrossModuleOverclock();
+              sounds.playClick(900);
+            }}
+            className={`px-2 py-1 rounded border font-bold text-[10px] sm:text-[11px] flex items-center gap-1 transition-all active:scale-95 ${
+              crossModuleState.isOverclocked
+                ? 'bg-amber-500 text-black border-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.6)] animate-pulse'
+                : 'bg-white/5 border-white/20 text-neutral-300 hover:text-white'
+            }`}
+            title="Toggle Hologram Gear RPM Overclock (+45% Fire Rate & Speed)"
+          >
+            <Zap className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">OVERCLOCK ({crossModuleState.gearRpm.toFixed(0)} RPM)</span>
+            <span className="sm:hidden">OC</span>
+          </button>
+
+          {/* Quick Subsystem Shield Injection */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              boostCrossModuleSubsystem('SHIELD');
+              if (engineRef.current) engineRef.current.liveHealth = Math.min(100, engineRef.current.liveHealth + 25);
+              setHealth((h) => Math.min(100, h + 25));
+              sounds.playPowerUpChime();
+            }}
+            className="px-2 py-1 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-400 text-emerald-300 rounded font-bold text-[10px] sm:text-[11px] flex items-center gap-1 shadow-[0_0_10px_rgba(16,185,129,0.3)] active:scale-95 transition-all"
+            title="Inject Deck Nutrients to Recharge Shield Matrix (+25 HP)"
+          >
+            <Shield className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="hidden sm:inline">SHIELD BOOST</span>
+            <span className="sm:hidden">+SHIELD</span>
+          </button>
+
           {/* Tactical 2D/3D Modules Asset Deck Button */}
           <button
             type="button"
