@@ -1199,15 +1199,19 @@ export function createStarfighterHero3DMesh(options: {
 }
 
 /**
- * Creates a Complete 3D Mobile Suit Valkyrie Gundam Mech with Front & Back Mesh
+ * Creates a Complete 3D Mobile Suit Valkyrie Gundam Mech with Front & Back Mesh,
+ * Volumetric Chassis Armor, Gold V-Fin, Beam Saber, and Dynamic Vernier Thrusters
  */
 export function createValkyrieGundam3DMesh(options: {
   frontTexture?: THREE.Texture;
   backTexture?: THREE.Texture;
   wireframe?: boolean;
   scale?: number;
-} = {}): THREE.Group {
-  const root = new THREE.Group();
+} = {}): THREE.Group & {
+  setBoost?: (boosting: boolean) => void;
+  setAttack?: (attacking: boolean) => void;
+} {
+  const root = new THREE.Group() as any;
   const s = options.scale || 1.0;
 
   const frontTex =
@@ -1227,7 +1231,19 @@ export function createValkyrieGundam3DMesh(options: {
       groutIntensity: 40,
     });
 
-  // Front & Back Dual-Sided Mesh Plaque
+  // 1. Solid Volumetric Armor Perimeter Hull
+  const chassisHull = createVolumetricChassisHull({
+    width: 3.0 * s,
+    height: 3.5 * s,
+    depth: 0.28 * s,
+    color: 0x0e1726,
+    bevelColor: 0x1e3a5f,
+    wireframe: options.wireframe,
+    shapeType: 'BIPED_ARMOR',
+  });
+  root.add(chassisHull);
+
+  // 2. Dual-Sided Front & Back Mesh Faceplates
   const torsoGroup = new THREE.Group();
   const planeGeo = new THREE.PlaneGeometry(3.0 * s, 3.5 * s);
 
@@ -1235,92 +1251,167 @@ export function createValkyrieGundam3DMesh(options: {
     map: frontTex,
     transparent: true,
     alphaTest: 0.05,
-    metalness: 0.85,
-    roughness: 0.25,
+    metalness: 0.88,
+    roughness: 0.22,
     side: THREE.FrontSide,
     wireframe: options.wireframe,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
   });
   const frontMesh = new THREE.Mesh(planeGeo, frontMat);
-  frontMesh.position.set(0, 1.75 * s, 0.02 * s);
+  frontMesh.position.set(0, 1.75 * s, 0.14 * s);
   torsoGroup.add(frontMesh);
 
   const backMat = new THREE.MeshStandardMaterial({
     map: backTex,
     transparent: true,
     alphaTest: 0.05,
-    metalness: 0.85,
-    roughness: 0.25,
+    metalness: 0.88,
+    roughness: 0.22,
     side: THREE.BackSide,
     wireframe: options.wireframe,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
   });
   const backMesh = new THREE.Mesh(planeGeo, backMat);
-  backMesh.position.set(0, 1.75 * s, -0.02 * s);
+  backMesh.position.set(0, 1.75 * s, -0.14 * s);
   torsoGroup.add(backMesh);
 
-  // 3D Gold V-Fin Antenna
-  const vFinL = new THREE.Mesh(
-    new THREE.ConeGeometry(0.08 * s, 0.9 * s, 4),
-    new THREE.MeshBasicMaterial({ color: 0xf59e0b })
-  );
-  vFinL.rotation.z = Math.PI / 4;
-  vFinL.position.set(-0.35 * s, 3.2 * s, 0.08 * s);
+  // 3. 3D Gold V-Fin Antenna Crown
+  const vFinMat = new THREE.MeshStandardMaterial({
+    color: 0xf59e0b,
+    metalness: 0.95,
+    roughness: 0.15,
+    emissive: 0xd97706,
+    emissiveIntensity: 0.4,
+  });
+  const vFinL = new THREE.Mesh(new THREE.ConeGeometry(0.09 * s, 1.0 * s, 4), vFinMat);
+  vFinL.rotation.z = Math.PI / 3.8;
+  vFinL.position.set(-0.38 * s, 3.25 * s, 0.16 * s);
   const vFinR = vFinL.clone();
-  vFinR.rotation.z = -Math.PI / 4;
-  vFinR.position.set(0.35 * s, 3.2 * s, 0.08 * s);
+  vFinR.rotation.z = -Math.PI / 3.8;
+  vFinR.position.set(0.38 * s, 3.25 * s, 0.16 * s);
   torsoGroup.add(vFinL);
   torsoGroup.add(vFinR);
 
-  // 3D Chest Reactor Core
-  const chestCore = new THREE.Mesh(
-    new THREE.SphereGeometry(0.18 * s, 16, 16),
-    new THREE.MeshBasicMaterial({ color: 0x00f0ff })
+  // Central Gold Forehead Jewel
+  const jewel = new THREE.Mesh(
+    new THREE.BoxGeometry(0.12 * s, 0.16 * s, 0.1 * s),
+    new THREE.MeshBasicMaterial({ color: 0xef4444 })
   );
-  chestCore.position.set(0, 1.6 * s, 0.08 * s);
+  jewel.position.set(0, 3.1 * s, 0.18 * s);
+  torsoGroup.add(jewel);
+
+  // 4. 3D Chest Reactor Core with Dynamic Glow
+  const chestCore = new THREE.Mesh(
+    new THREE.SphereGeometry(0.2 * s, 16, 16),
+    new THREE.MeshStandardMaterial({
+      color: 0x00f0ff,
+      emissive: 0x0088cc,
+      emissiveIntensity: 0.8,
+      roughness: 0.1,
+    })
+  );
+  chestCore.position.set(0, 1.65 * s, 0.16 * s);
   torsoGroup.add(chestCore);
 
-  // 3D Rear High-Mobility Booster Verniers
-  const boosterGeo = new THREE.CylinderGeometry(0.1 * s, 0.14 * s, 0.45 * s, 8);
+  // 5. Heavy Shoulder Pauldron Armor Pods
+  const pauldronGeo = new THREE.BoxGeometry(0.7 * s, 0.4 * s, 0.5 * s);
+  const pauldronMat = new THREE.MeshStandardMaterial({
+    color: 0x1e293b,
+    metalness: 0.9,
+    roughness: 0.25,
+  });
+  const pauldronL = new THREE.Mesh(pauldronGeo, pauldronMat);
+  pauldronL.position.set(-1.6 * s, 2.7 * s, 0);
+  pauldronL.rotation.z = 0.2;
+  const pauldronR = pauldronL.clone();
+  pauldronR.position.set(1.6 * s, 2.7 * s, 0);
+  pauldronR.rotation.z = -0.2;
+  torsoGroup.add(pauldronL);
+  torsoGroup.add(pauldronR);
+
+  // 6. 3D Rear High-Mobility Booster Verniers & Ion Plumes
+  const boosterGeo = new THREE.CylinderGeometry(0.12 * s, 0.16 * s, 0.55 * s, 8);
   boosterGeo.rotateX(Math.PI / 2);
-  const boosterMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.9 });
+  const boosterMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.95 });
   const boosterL = new THREE.Mesh(boosterGeo, boosterMat);
-  boosterL.position.set(-0.4 * s, 1.7 * s, -0.2 * s);
+  boosterL.position.set(-0.45 * s, 1.8 * s, -0.32 * s);
   const boosterR = boosterL.clone();
-  boosterR.position.set(0.4 * s, 1.7 * s, -0.2 * s);
+  boosterR.position.set(0.45 * s, 1.8 * s, -0.32 * s);
   torsoGroup.add(boosterL);
   torsoGroup.add(boosterR);
 
-  // Rear Booster Glow Cones
-  const boosterGlowGeo = new THREE.ConeGeometry(0.12 * s, 0.5 * s, 6);
+  // Rear Booster Ion Flame Cones
+  const boosterGlowGeo = new THREE.ConeGeometry(0.14 * s, 0.65 * s, 8);
   boosterGlowGeo.rotateX(-Math.PI / 2);
-  const boosterGlowMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+  const boosterGlowMat = new THREE.MeshBasicMaterial({
+    color: 0x00f0ff,
+    transparent: true,
+    opacity: 0.85,
+  });
   const boosterGlowL = new THREE.Mesh(boosterGlowGeo, boosterGlowMat);
-  boosterGlowL.position.set(-0.4 * s, 1.7 * s, -0.45 * s);
+  boosterGlowL.position.set(-0.45 * s, 1.8 * s, -0.65 * s);
   const boosterGlowR = boosterGlowL.clone();
-  boosterGlowR.position.set(0.4 * s, 1.7 * s, -0.45 * s);
+  boosterGlowR.position.set(0.45 * s, 1.8 * s, -0.65 * s);
   torsoGroup.add(boosterGlowL);
   torsoGroup.add(boosterGlowR);
 
-  // 3D Beam Saber mounted on Right Shoulder / Hand
+  // Inner Core Flame
+  const innerFlameGeo = new THREE.ConeGeometry(0.07 * s, 0.45 * s, 6);
+  innerFlameGeo.rotateX(-Math.PI / 2);
+  const innerFlameMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const innerFlameL = new THREE.Mesh(innerFlameGeo, innerFlameMat);
+  innerFlameL.position.set(-0.45 * s, 1.8 * s, -0.55 * s);
+  const innerFlameR = innerFlameL.clone();
+  innerFlameR.position.set(0.45 * s, 1.8 * s, -0.55 * s);
+  torsoGroup.add(innerFlameL);
+  torsoGroup.add(innerFlameR);
+
+  // 7. 3D Beam Saber mounted on Right Hand / Scabbard
   const saberHilt = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.06 * s, 0.06 * s, 0.5 * s, 8),
-    new THREE.MeshStandardMaterial({ color: 0xffffff })
+    new THREE.CylinderGeometry(0.05 * s, 0.05 * s, 0.5 * s, 8),
+    new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.9 })
   );
   const saberBlade = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.04 * s, 0.04 * s, 2.6 * s, 8),
+    new THREE.CylinderGeometry(0.035 * s, 0.035 * s, 2.8 * s, 8),
     new THREE.MeshBasicMaterial({ color: 0x00f0ff })
   );
-  saberBlade.position.set(0, 1.35 * s, 0);
+  saberBlade.position.set(0, 1.45 * s, 0);
+
+  const saberGlow = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.06 * s, 0.06 * s, 2.8 * s, 8),
+    new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.4 })
+  );
+  saberGlow.position.set(0, 1.45 * s, 0);
+
   const beamSaber = new THREE.Group();
   beamSaber.add(saberHilt);
   beamSaber.add(saberBlade);
-  beamSaber.position.set(1.4 * s, 1.4 * s, 0.3 * s);
-  beamSaber.rotation.x = Math.PI / 4;
+  beamSaber.add(saberGlow);
+  beamSaber.position.set(1.45 * s, 1.5 * s, 0.35 * s);
+  beamSaber.rotation.x = Math.PI / 4.5;
   torsoGroup.add(beamSaber);
 
-  // Ground Shadow
+  // Dynamic Thruster Controller
+  root.setBoost = (boosting: boolean) => {
+    const scale = boosting ? 2.4 : 1.0;
+    boosterGlowL.scale.set(boosting ? 1.3 : 1.0, boosting ? 1.3 : 1.0, scale);
+    boosterGlowR.scale.set(boosting ? 1.3 : 1.0, boosting ? 1.3 : 1.0, scale);
+    boosterGlowMat.color.setHex(boosting ? 0xffaa00 : 0x00f0ff);
+  };
+
+  root.setAttack = (attacking: boolean) => {
+    beamSaber.rotation.x = attacking ? Math.PI / 2 : Math.PI / 4.5;
+    saberBlade.scale.set(attacking ? 1.2 : 1.0, attacking ? 1.2 : 1.0, attacking ? 1.2 : 1.0);
+  };
+
+  // Ground Contact Shadow
   const shadow = new THREE.Mesh(
-    new THREE.CircleGeometry(1.2 * s, 16),
-    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.5 })
+    new THREE.CircleGeometry(1.3 * s, 16),
+    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.55 })
   );
   shadow.rotation.x = -Math.PI / 2;
   shadow.position.y = 0.02;
@@ -1331,7 +1422,8 @@ export function createValkyrieGundam3DMesh(options: {
 }
 
 /**
- * Creates a Heavy Goliath Titan Boss 3D Mesh with Front & Back Rendering
+ * Creates a Heavy Goliath Titan Boss 3D Mesh with Front & Back Rendering,
+ * Volumetric Armor Hull, Dark Matter Core, and Twin Heat-Exhaust Stacks
  */
 export function createGoliathBoss3DMesh(options: {
   frontTexture?: THREE.Texture;
@@ -1359,56 +1451,99 @@ export function createGoliathBoss3DMesh(options: {
       groutIntensity: 45,
     });
 
+  // 1. Heavy Volumetric Armor Hull
+  const chassisHull = createVolumetricChassisHull({
+    width: 4.8 * s,
+    height: 5.2 * s,
+    depth: 0.35 * s,
+    color: 0x22050b,
+    bevelColor: 0x4a0815,
+    wireframe: options.wireframe,
+    shapeType: 'BIPED_ARMOR',
+  });
+  root.add(chassisHull);
+
   const geo = new THREE.PlaneGeometry(5.2 * s, 5.2 * s);
 
   const frontMat = new THREE.MeshStandardMaterial({
     map: frontTex,
     transparent: true,
     alphaTest: 0.05,
-    metalness: 0.85,
-    roughness: 0.28,
+    metalness: 0.88,
+    roughness: 0.25,
     side: THREE.FrontSide,
     wireframe: options.wireframe,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
   });
   const frontMesh = new THREE.Mesh(geo, frontMat);
-  frontMesh.position.set(0, 2.6 * s, 0.03 * s);
+  frontMesh.position.set(0, 2.6 * s, 0.18 * s);
   root.add(frontMesh);
 
   const backMat = new THREE.MeshStandardMaterial({
     map: backTex,
     transparent: true,
     alphaTest: 0.05,
-    metalness: 0.85,
-    roughness: 0.28,
+    metalness: 0.88,
+    roughness: 0.25,
     side: THREE.BackSide,
     wireframe: options.wireframe,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
   });
   const backMesh = new THREE.Mesh(geo, backMat);
-  backMesh.position.set(0, 2.6 * s, -0.03 * s);
+  backMesh.position.set(0, 2.6 * s, -0.18 * s);
   root.add(backMesh);
 
   // Central Crimson Pulsing Dark Matter Core
   const core = new THREE.Mesh(
-    new THREE.SphereGeometry(0.38 * s, 16, 16),
-    new THREE.MeshBasicMaterial({ color: 0xff0044 })
+    new THREE.SphereGeometry(0.42 * s, 16, 16),
+    new THREE.MeshStandardMaterial({
+      color: 0xff0044,
+      emissive: 0xcc0033,
+      emissiveIntensity: 0.9,
+      roughness: 0.15,
+    })
   );
-  core.position.set(0, 2.5 * s, 0.1 * s);
+  core.position.set(0, 2.5 * s, 0.22 * s);
   root.add(core);
 
-  // Rear Heavy Heat Exhaust Pipes
-  const exhaustGeo = new THREE.CylinderGeometry(0.14 * s, 0.18 * s, 0.8 * s, 8);
+  // Shoulder Mounted Missile Silos
+  const siloGeo = new THREE.BoxGeometry(0.9 * s, 0.6 * s, 0.8 * s);
+  const siloMat = new THREE.MeshStandardMaterial({ color: 0x180307, metalness: 0.95 });
+  const siloL = new THREE.Mesh(siloGeo, siloMat);
+  siloL.position.set(-2.2 * s, 4.4 * s, 0);
+  const siloR = siloL.clone();
+  siloR.position.set(2.2 * s, 4.4 * s, 0);
+  root.add(siloL);
+  root.add(siloR);
+
+  // Rear Heavy Heat Exhaust Pipes & Flame Plumes
+  const exhaustGeo = new THREE.CylinderGeometry(0.18 * s, 0.24 * s, 1.0 * s, 8);
   exhaustGeo.rotateX(Math.PI / 2);
-  const exhaustMat = new THREE.MeshStandardMaterial({ color: 0x22050b, metalness: 0.9 });
+  const exhaustMat = new THREE.MeshStandardMaterial({ color: 0x180307, metalness: 0.95 });
   const exhaustL = new THREE.Mesh(exhaustGeo, exhaustMat);
-  exhaustL.position.set(-0.7 * s, 2.7 * s, -0.3 * s);
+  exhaustL.position.set(-0.85 * s, 2.8 * s, -0.4 * s);
   const exhaustR = exhaustL.clone();
-  exhaustR.position.set(0.7 * s, 2.7 * s, -0.3 * s);
+  exhaustR.position.set(0.85 * s, 2.8 * s, -0.4 * s);
   root.add(exhaustL);
   root.add(exhaustR);
 
-  // Shadow
+  const exhaustFlameGeo = new THREE.ConeGeometry(0.18 * s, 0.8 * s, 8);
+  exhaustFlameGeo.rotateX(-Math.PI / 2);
+  const exhaustFlameMat = new THREE.MeshBasicMaterial({ color: 0xff4400, transparent: true, opacity: 0.8 });
+  const flameL = new THREE.Mesh(exhaustFlameGeo, exhaustFlameMat);
+  flameL.position.set(-0.85 * s, 2.8 * s, -0.9 * s);
+  const flameR = flameL.clone();
+  flameR.position.set(0.85 * s, 2.8 * s, -0.9 * s);
+  root.add(flameL);
+  root.add(flameR);
+
+  // Ground Shadow
   const shadow = new THREE.Mesh(
-    new THREE.CircleGeometry(2.0 * s, 16),
+    new THREE.CircleGeometry(2.2 * s, 16),
     new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.65 })
   );
   shadow.rotation.x = -Math.PI / 2;
@@ -1419,7 +1554,8 @@ export function createGoliathBoss3DMesh(options: {
 }
 
 /**
- * Creates a Sleek Cyber Drone 3D Mesh with Front & Back Rendering
+ * Creates a Sleek Cyber Drone 3D Mesh with Front & Back Rendering,
+ * Tri-Rotor Carbon Arms, and Optical Core
  */
 export function createCyberDrone3DMesh(options: {
   frontTexture?: THREE.Texture;
@@ -1447,6 +1583,19 @@ export function createCyberDrone3DMesh(options: {
       groutIntensity: 40,
     });
 
+  // Volumetric Drone Ring Hull
+  const chassisHull = createVolumetricChassisHull({
+    width: 2.8 * s,
+    height: 2.8 * s,
+    depth: 0.22 * s,
+    color: 0x071524,
+    bevelColor: 0x00f0ff,
+    wireframe: options.wireframe,
+    shapeType: 'HEX_DRONE',
+  });
+  chassisHull.position.set(0, 1.4 * s, 0);
+  root.add(chassisHull);
+
   const geo = new THREE.PlaneGeometry(2.8 * s, 2.8 * s);
 
   const frontMat = new THREE.MeshStandardMaterial({
@@ -1457,9 +1606,12 @@ export function createCyberDrone3DMesh(options: {
     roughness: 0.2,
     side: THREE.FrontSide,
     wireframe: options.wireframe,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
   });
   const frontMesh = new THREE.Mesh(geo, frontMat);
-  frontMesh.position.set(0, 1.4 * s, 0.02 * s);
+  frontMesh.position.set(0, 1.4 * s, 0.12 * s);
   root.add(frontMesh);
 
   const backMat = new THREE.MeshStandardMaterial({
@@ -1470,31 +1622,46 @@ export function createCyberDrone3DMesh(options: {
     roughness: 0.2,
     side: THREE.BackSide,
     wireframe: options.wireframe,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
   });
   const backMesh = new THREE.Mesh(geo, backMat);
-  backMesh.position.set(0, 1.4 * s, -0.02 * s);
+  backMesh.position.set(0, 1.4 * s, -0.12 * s);
   root.add(backMesh);
 
-  // Glowing Optic Sensor
+  // Glowing Cyan Optic Sensor
   const optic = new THREE.Mesh(
-    new THREE.SphereGeometry(0.18 * s, 12, 12),
-    new THREE.MeshBasicMaterial({ color: 0x00f0ff })
+    new THREE.SphereGeometry(0.22 * s, 12, 12),
+    new THREE.MeshStandardMaterial({
+      color: 0x00f0ff,
+      emissive: 0x00ffff,
+      emissiveIntensity: 0.8,
+    })
   );
-  optic.position.set(0, 1.4 * s, 0.06 * s);
+  optic.position.set(0, 1.4 * s, 0.16 * s);
   root.add(optic);
 
-  // Rear Propulsion Disc
+  // Rear Propulsion Disc & Blue Flame
   const propDisc = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.2 * s, 0.2 * s, 0.1 * s, 12),
+    new THREE.CylinderGeometry(0.22 * s, 0.22 * s, 0.1 * s, 12),
     new THREE.MeshBasicMaterial({ color: 0x38bdf8 })
   );
   propDisc.rotation.x = Math.PI / 2;
-  propDisc.position.set(0, 1.4 * s, -0.1 * s);
+  propDisc.position.set(0, 1.4 * s, -0.18 * s);
   root.add(propDisc);
+
+  const droneFlame = new THREE.Mesh(
+    new THREE.ConeGeometry(0.16 * s, 0.45 * s, 6),
+    new THREE.MeshBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.85 })
+  );
+  droneFlame.rotation.x = -Math.PI / 2;
+  droneFlame.position.set(0, 1.4 * s, -0.45 * s);
+  root.add(droneFlame);
 
   // Shadow
   const shadow = new THREE.Mesh(
-    new THREE.CircleGeometry(0.9 * s, 12),
+    new THREE.CircleGeometry(1.0 * s, 12),
     new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.45 })
   );
   shadow.rotation.x = -Math.PI / 2;
@@ -1505,7 +1672,8 @@ export function createCyberDrone3DMesh(options: {
 }
 
 /**
- * Creates a Floating Combat Sentinel Droid 3D Mesh with Front & Back Rendering
+ * Creates a Floating Combat Sentinel Droid 3D Mesh with Front & Back Rendering,
+ * Hexagonal Perimeter Hull, Pulsing Magenta Core, and Magnetic Levitation Ring
  */
 export function createSentinelDroid3DMesh(options: {
   frontTexture?: THREE.Texture;
@@ -1533,6 +1701,19 @@ export function createSentinelDroid3DMesh(options: {
       groutIntensity: 40,
     });
 
+  // Volumetric Hex Hull
+  const chassisHull = createVolumetricChassisHull({
+    width: 2.8 * s,
+    height: 2.8 * s,
+    depth: 0.24 * s,
+    color: 0x1e0e29,
+    bevelColor: 0xd946ef,
+    wireframe: options.wireframe,
+    shapeType: 'HEX_DRONE',
+  });
+  chassisHull.position.set(0, 1.4 * s, 0);
+  root.add(chassisHull);
+
   const geo = new THREE.PlaneGeometry(2.8 * s, 2.8 * s);
 
   const frontMat = new THREE.MeshStandardMaterial({
@@ -1543,9 +1724,12 @@ export function createSentinelDroid3DMesh(options: {
     roughness: 0.22,
     side: THREE.FrontSide,
     wireframe: options.wireframe,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
   });
   const frontMesh = new THREE.Mesh(geo, frontMat);
-  frontMesh.position.set(0, 1.4 * s, 0.02 * s);
+  frontMesh.position.set(0, 1.4 * s, 0.13 * s);
   root.add(frontMesh);
 
   const backMat = new THREE.MeshStandardMaterial({
@@ -1556,30 +1740,37 @@ export function createSentinelDroid3DMesh(options: {
     roughness: 0.22,
     side: THREE.BackSide,
     wireframe: options.wireframe,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
   });
   const backMesh = new THREE.Mesh(geo, backMat);
-  backMesh.position.set(0, 1.4 * s, -0.02 * s);
+  backMesh.position.set(0, 1.4 * s, -0.13 * s);
   root.add(backMesh);
 
   // Magenta Optic Scanner Core
   const core = new THREE.Mesh(
-    new THREE.SphereGeometry(0.2 * s, 12, 12),
-    new THREE.MeshBasicMaterial({ color: 0xd946ef })
+    new THREE.SphereGeometry(0.24 * s, 12, 12),
+    new THREE.MeshStandardMaterial({
+      color: 0xd946ef,
+      emissive: 0xa21caf,
+      emissiveIntensity: 0.8,
+    })
   );
-  core.position.set(0, 1.4 * s, 0.06 * s);
+  core.position.set(0, 1.4 * s, 0.16 * s);
   root.add(core);
 
-  // Rear Levitation Ring
+  // Rear Magnetic Levitation Ring
   const levRing = new THREE.Mesh(
-    new THREE.TorusGeometry(0.35 * s, 0.06 * s, 8, 16),
+    new THREE.TorusGeometry(0.42 * s, 0.07 * s, 8, 16),
     new THREE.MeshBasicMaterial({ color: 0xa855f7 })
   );
-  levRing.position.set(0, 1.4 * s, -0.08 * s);
+  levRing.position.set(0, 1.4 * s, -0.18 * s);
   root.add(levRing);
 
   // Shadow
   const shadow = new THREE.Mesh(
-    new THREE.CircleGeometry(0.9 * s, 12),
+    new THREE.CircleGeometry(1.0 * s, 12),
     new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.45 })
   );
   shadow.rotation.x = -Math.PI / 2;
@@ -1590,7 +1781,8 @@ export function createSentinelDroid3DMesh(options: {
 }
 
 /**
- * Creates a 3D Cyber Pilot / Runner Character with Front & Back Rendering
+ * Creates a 3D Cyber Pilot / Runner Character with Front & Back Rendering,
+ * Volumetric Armor Chassis Hull, Cyber Visor HUD, and Twin Jump-Jet Nozzles
  */
 export function createCyberPilot3DMesh(options: {
   frontTexture?: THREE.Texture;
@@ -1618,6 +1810,19 @@ export function createCyberPilot3DMesh(options: {
       groutIntensity: 35,
     });
 
+  // Volumetric Armor Hull
+  const chassisHull = createVolumetricChassisHull({
+    width: 2.4 * s,
+    height: 3.2 * s,
+    depth: 0.24 * s,
+    color: 0x0a192f,
+    bevelColor: 0x00f0ff,
+    wireframe: options.wireframe,
+    shapeType: 'BIPED_ARMOR',
+  });
+  chassisHull.position.set(0, 0, 0);
+  root.add(chassisHull);
+
   const geo = new THREE.PlaneGeometry(2.4 * s, 3.2 * s);
 
   const frontMat = new THREE.MeshStandardMaterial({
@@ -1628,9 +1833,12 @@ export function createCyberPilot3DMesh(options: {
     roughness: 0.25,
     side: THREE.FrontSide,
     wireframe: options.wireframe,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
   });
   const frontMesh = new THREE.Mesh(geo, frontMat);
-  frontMesh.position.set(0, 1.6 * s, 0.02 * s);
+  frontMesh.position.set(0, 1.6 * s, 0.12 * s);
   root.add(frontMesh);
 
   const backMat = new THREE.MeshStandardMaterial({
@@ -1641,34 +1849,51 @@ export function createCyberPilot3DMesh(options: {
     roughness: 0.25,
     side: THREE.BackSide,
     wireframe: options.wireframe,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
   });
   const backMesh = new THREE.Mesh(geo, backMat);
-  backMesh.position.set(0, 1.6 * s, -0.02 * s);
+  backMesh.position.set(0, 1.6 * s, -0.12 * s);
   root.add(backMesh);
 
-  // Cyber Visor HUD
+  // Cyber Visor HUD with High Emissive Glow
   const visor = new THREE.Mesh(
-    new THREE.BoxGeometry(0.35 * s, 0.12 * s, 0.08 * s),
-    new THREE.MeshBasicMaterial({ color: 0x00f0ff })
+    new THREE.BoxGeometry(0.38 * s, 0.14 * s, 0.1 * s),
+    new THREE.MeshStandardMaterial({
+      color: 0x00f0ff,
+      emissive: 0x00d8ff,
+      emissiveIntensity: 0.9,
+    })
   );
-  visor.position.set(0, 2.7 * s, 0.08 * s);
+  visor.position.set(0, 2.7 * s, 0.16 * s);
   root.add(visor);
 
-  // Rear Jet Backpack Nozzles
+  // Rear Jet Backpack Nozzles with Ion Flame
   const jetL = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.05 * s, 0.08 * s, 0.25 * s, 8),
-    new THREE.MeshBasicMaterial({ color: 0x38bdf8 })
+    new THREE.CylinderGeometry(0.06 * s, 0.09 * s, 0.3 * s, 8),
+    new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.95 })
   );
   jetL.rotation.x = Math.PI / 2;
-  jetL.position.set(-0.25 * s, 1.8 * s, -0.12 * s);
+  jetL.position.set(-0.28 * s, 1.8 * s, -0.18 * s);
   const jetR = jetL.clone();
-  jetR.position.set(0.25 * s, 1.8 * s, -0.12 * s);
+  jetR.position.set(0.28 * s, 1.8 * s, -0.18 * s);
   root.add(jetL);
   root.add(jetR);
 
+  const jetFlameGeo = new THREE.ConeGeometry(0.08 * s, 0.35 * s, 6);
+  jetFlameGeo.rotateX(-Math.PI / 2);
+  const jetFlameMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.85 });
+  const flameL = new THREE.Mesh(jetFlameGeo, jetFlameMat);
+  flameL.position.set(-0.28 * s, 1.8 * s, -0.38 * s);
+  const flameR = flameL.clone();
+  flameR.position.set(0.28 * s, 1.8 * s, -0.38 * s);
+  root.add(flameL);
+  root.add(flameR);
+
   // Shadow
   const shadow = new THREE.Mesh(
-    new THREE.CircleGeometry(0.8 * s, 12),
+    new THREE.CircleGeometry(0.9 * s, 12),
     new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.5 })
   );
   shadow.rotation.x = -Math.PI / 2;
@@ -1679,7 +1904,8 @@ export function createCyberPilot3DMesh(options: {
 }
 
 /**
- * Creates a 3D Stealth Corvette Starship Mesh with Front & Back Rendering
+ * Creates a 3D Stealth Corvette Starship Mesh with Front & Back Rendering,
+ * Volumetric Wedge Hull, and Rear Warp Drives
  */
 export function createStealthCorvette3DMesh(options: {
   frontTexture?: THREE.Texture;
@@ -1707,6 +1933,19 @@ export function createStealthCorvette3DMesh(options: {
       groutIntensity: 40,
     });
 
+  // Volumetric Starfighter Hull
+  const chassisHull = createVolumetricChassisHull({
+    width: 3.6 * s,
+    height: 4.2 * s,
+    depth: 0.28 * s,
+    color: 0x090514,
+    bevelColor: 0xa855f7,
+    wireframe: options.wireframe,
+    shapeType: 'DELTA_FUSELAGE',
+  });
+  chassisHull.rotation.x = Math.PI / 2;
+  root.add(chassisHull);
+
   const geo = new THREE.PlaneGeometry(3.6 * s, 4.2 * s);
   geo.rotateX(-Math.PI / 2);
 
@@ -1718,9 +1957,12 @@ export function createStealthCorvette3DMesh(options: {
     roughness: 0.2,
     side: THREE.FrontSide,
     wireframe: options.wireframe,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
   });
   const topMesh = new THREE.Mesh(geo, topMat);
-  topMesh.position.set(0, 0.02 * s, 0);
+  topMesh.position.set(0, 0.14 * s, 0);
   root.add(topMesh);
 
   const bottomMat = new THREE.MeshStandardMaterial({
@@ -1731,35 +1973,49 @@ export function createStealthCorvette3DMesh(options: {
     roughness: 0.2,
     side: THREE.BackSide,
     wireframe: options.wireframe,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
   });
   const bottomMesh = new THREE.Mesh(geo, bottomMat);
-  bottomMesh.position.set(0, -0.02 * s, 0);
+  bottomMesh.position.set(0, -0.14 * s, 0);
   root.add(bottomMesh);
 
   // Stealth Prow Wedge
-  const prowGeo = new THREE.ConeGeometry(0.45 * s, 2.8 * s, 6);
+  const prowGeo = new THREE.ConeGeometry(0.5 * s, 3.0 * s, 6);
   prowGeo.rotateX(Math.PI / 2);
-  const prowMat = new THREE.MeshStandardMaterial({ color: 0x0b0e17, metalness: 0.95 });
+  const prowMat = new THREE.MeshStandardMaterial({ color: 0x110a24, metalness: 0.95 });
   const prow = new THREE.Mesh(prowGeo, prowMat);
-  prow.position.set(0, 0, -1.0 * s);
+  prow.position.set(0, 0, -1.1 * s);
   root.add(prow);
 
-  // Rear Warp Engines
-  const engineGeo = new THREE.CylinderGeometry(0.18 * s, 0.24 * s, 0.6 * s, 8);
+  // Rear Warp Engines & Ion Trails
+  const engineGeo = new THREE.CylinderGeometry(0.2 * s, 0.26 * s, 0.7 * s, 8);
   engineGeo.rotateX(Math.PI / 2);
-  const engineMat = new THREE.MeshBasicMaterial({ color: 0xa855f7 });
+  const engineMat = new THREE.MeshStandardMaterial({ color: 0x110a24, metalness: 0.95 });
   const engineL = new THREE.Mesh(engineGeo, engineMat);
-  engineL.position.set(-0.6 * s, 0, 1.6 * s);
+  engineL.position.set(-0.65 * s, 0, 1.7 * s);
   const engineR = engineL.clone();
-  engineR.position.set(0.6 * s, 0, 1.6 * s);
+  engineR.position.set(0.65 * s, 0, 1.7 * s);
   root.add(engineL);
   root.add(engineR);
+
+  const warpConeGeo = new THREE.ConeGeometry(0.2 * s, 0.8 * s, 8);
+  warpConeGeo.rotateX(Math.PI / 2);
+  const warpMat = new THREE.MeshBasicMaterial({ color: 0xc084fc, transparent: true, opacity: 0.85 });
+  const warpL = new THREE.Mesh(warpConeGeo, warpMat);
+  warpL.position.set(-0.65 * s, 0, 2.2 * s);
+  const warpR = warpL.clone();
+  warpR.position.set(0.65 * s, 0, 2.2 * s);
+  root.add(warpL);
+  root.add(warpR);
 
   return root;
 }
 
 /**
- * Creates a Heavy Cruiser Boss Dreadnought 3D Mesh with Front & Back Rendering
+ * Creates a Heavy Cruiser Boss Dreadnought 3D Mesh with Front & Back Rendering,
+ * Volumetric Armored Hull, Command Citadel, and Quad Warp Drives
  */
 export function createCruiserBoss3DMesh(options: {
   frontTexture?: THREE.Texture;
@@ -1787,6 +2043,19 @@ export function createCruiserBoss3DMesh(options: {
       groutIntensity: 45,
     });
 
+  // Heavy Volumetric Dreadnought Hull
+  const chassisHull = createVolumetricChassisHull({
+    width: 7.0 * s,
+    height: 8.5 * s,
+    depth: 0.45 * s,
+    color: 0x22050f,
+    bevelColor: 0xff0055,
+    wireframe: options.wireframe,
+    shapeType: 'DELTA_FUSELAGE',
+  });
+  chassisHull.rotation.x = Math.PI / 2;
+  root.add(chassisHull);
+
   const geo = new THREE.PlaneGeometry(7.0 * s, 8.5 * s);
   geo.rotateX(-Math.PI / 2);
 
@@ -1798,9 +2067,12 @@ export function createCruiserBoss3DMesh(options: {
     roughness: 0.24,
     side: THREE.FrontSide,
     wireframe: options.wireframe,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
   });
   const topMesh = new THREE.Mesh(geo, topMat);
-  topMesh.position.set(0, 0.04 * s, 0);
+  topMesh.position.set(0, 0.22 * s, 0);
   root.add(topMesh);
 
   const bottomMat = new THREE.MeshStandardMaterial({
@@ -1811,36 +2083,49 @@ export function createCruiserBoss3DMesh(options: {
     roughness: 0.24,
     side: THREE.BackSide,
     wireframe: options.wireframe,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
   });
   const bottomMesh = new THREE.Mesh(geo, bottomMat);
-  bottomMesh.position.set(0, -0.04 * s, 0);
+  bottomMesh.position.set(0, -0.22 * s, 0);
   root.add(bottomMesh);
 
-  // Command Bridge
+  // Command Bridge Citadel
   const bridge = new THREE.Mesh(
-    new THREE.BoxGeometry(1.2 * s, 0.6 * s, 1.8 * s),
-    new THREE.MeshStandardMaterial({ color: 0x33050f, metalness: 0.9 })
+    new THREE.BoxGeometry(1.4 * s, 0.8 * s, 2.2 * s),
+    new THREE.MeshStandardMaterial({ color: 0x33050f, metalness: 0.95, roughness: 0.2 })
   );
-  bridge.position.set(0, 0.5 * s, -0.5 * s);
+  bridge.position.set(0, 0.7 * s, -0.6 * s);
   root.add(bridge);
 
   // Glowing Crimson Core Emitter
   const core = new THREE.Mesh(
-    new THREE.SphereGeometry(0.35 * s, 12, 12),
-    new THREE.MeshBasicMaterial({ color: 0xff0044 })
+    new THREE.SphereGeometry(0.45 * s, 16, 16),
+    new THREE.MeshStandardMaterial({
+      color: 0xff0044,
+      emissive: 0xcc0033,
+      emissiveIntensity: 0.9,
+    })
   );
-  core.position.set(0, 0.4 * s, 0.2 * s);
+  core.position.set(0, 0.5 * s, 0.3 * s);
   root.add(core);
 
-  // Quad Rear Engines
+  // Quad Heavy Rear Engines & Plumes
   for (let i = -1.5; i <= 1.5; i += 1.0) {
-    const eng = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.22 * s, 0.28 * s, 0.7 * s, 8),
-      new THREE.MeshBasicMaterial({ color: 0xff0055 })
-    );
-    eng.rotation.x = Math.PI / 2;
-    eng.position.set(i * 1.1 * s, 0, 3.8 * s);
+    const engGeo = new THREE.CylinderGeometry(0.24 * s, 0.32 * s, 0.9 * s, 8);
+    engGeo.rotateX(Math.PI / 2);
+    const engMat = new THREE.MeshStandardMaterial({ color: 0x180307, metalness: 0.95 });
+    const eng = new THREE.Mesh(engGeo, engMat);
+    eng.position.set(i * 1.2 * s, 0, 4.0 * s);
     root.add(eng);
+
+    const flameGeo = new THREE.ConeGeometry(0.25 * s, 1.2 * s, 8);
+    flameGeo.rotateX(Math.PI / 2);
+    const flameMat = new THREE.MeshBasicMaterial({ color: 0xff0055, transparent: true, opacity: 0.85 });
+    const flame = new THREE.Mesh(flameGeo, flameMat);
+    flame.position.set(i * 1.2 * s, 0, 4.8 * s);
+    root.add(flame);
   }
 
   return root;

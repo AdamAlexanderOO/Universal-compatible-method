@@ -348,7 +348,11 @@ export const ThirdPersonTacticalShooter3D: React.FC<ThirdPersonTacticalShooterPr
 
     // 3rd Person Mech Hero Model - High Fidelity Level 4 Roman Mosaic Rig with Dual-Sided Front & Back Meshes
     const heroGroup = new THREE.Group();
-    const heroTorso = createValkyrieGundam3DMesh({ scale: 1.0 });
+    const heroTorso = createValkyrieGundam3DMesh({
+      frontTexture: heroMosaicFront,
+      backTexture: heroMosaicBack,
+      scale: 1.0,
+    });
     const heroLegs = new THREE.Group();
     heroGroup.add(heroTorso);
     heroGroup.add(heroLegs);
@@ -483,6 +487,11 @@ export const ThirdPersonTacticalShooter3D: React.FC<ThirdPersonTacticalShooterPr
         g.heroTorso.position.y = 0;
         g.heroTorso.rotation.z = 0;
       }
+
+      // Dynamic Booster Vernier Flames and Attack Pose
+      const isBoosting = isWalking || g.liveDashCd > 0;
+      (g.heroTorso as any).setBoost?.(isBoosting);
+      (g.heroTorso as any).setAttack?.(g.isShooting);
 
       // Smooth Hero Rotation
       g.playerYaw = THREE.MathUtils.lerp(g.playerYaw, g.targetYaw, delta * 12);
