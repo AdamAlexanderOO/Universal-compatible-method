@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { IMAGE_ASSETS, loadAppImage } from './imageAssets';
 
 export type MosaicCharacterType =
   | 'HERO_MECH_FRONT'
@@ -50,40 +51,40 @@ export interface MosaicTextureOptions {
 
 // Map character types to high-resolution concept art images
 export const CHARACTER_IMAGE_ASSETS: Record<MosaicCharacterType, string> = {
-  HERO_MECH_FRONT: '/src/assets/images/player_mech_hero_1787187990637.jpg',
-  HERO_MECH_BACK: '/src/assets/images/player_mech_rear_1787188006708.jpg',
-  VALKYRIE_GUNDAM: '/src/assets/images/valkyrie_gundam_1787434609815.jpg',
-  VALKYRIE_FRONT: '/src/assets/images/valkyrie_gundam_1787434609815.jpg',
-  VALKYRIE_BACK: '/src/assets/images/valkyrie_gundam_1787434609815.jpg',
-  GOLIATH_TITAN: '/src/assets/images/enemy_tps_mech_1787090446411.jpg',
-  GOLIATH_FRONT: '/src/assets/images/enemy_tps_mech_1787090446411.jpg',
-  GOLIATH_BACK: '/src/assets/images/enemy_tps_mech_1787090446411.jpg',
-  CYBER_DRONE: '/src/assets/images/enemy_drone_fighter_1787090400681.jpg',
-  CYBER_DRONE_FRONT: '/src/assets/images/enemy_drone_fighter_1787090400681.jpg',
-  CYBER_DRONE_BACK: '/src/assets/images/enemy_drone_fighter_1787090400681.jpg',
-  SENTINEL_DROID: '/src/assets/images/enemy_fps_sentinel_1787090428781.jpg',
-  SENTINEL_FRONT: '/src/assets/images/enemy_fps_sentinel_1787090428781.jpg',
-  SENTINEL_BACK: '/src/assets/images/enemy_fps_sentinel_1787090428781.jpg',
-  STARFIGHTER_INTERCEPTOR: '/src/assets/images/space_starfighter_hero_1787089887255.jpg',
-  STARFIGHTER_FRONT: '/src/assets/images/space_starfighter_hero_1787089887255.jpg',
-  STARFIGHTER_BACK: '/src/assets/images/space_starfighter_hero_1787089887255.jpg',
-  STEALTH_CORVETTE: '/src/assets/images/stealth_corvette_1787434635548.jpg',
-  STEALTH_CORVETTE_FRONT: '/src/assets/images/stealth_corvette_1787434635548.jpg',
-  STEALTH_CORVETTE_BACK: '/src/assets/images/stealth_corvette_1787434635548.jpg',
-  CRUISER_BOSS: '/src/assets/images/enemy_cruiser_boss_1787090414452.jpg',
-  CRUISER_BOSS_FRONT: '/src/assets/images/enemy_cruiser_boss_1787090414452.jpg',
-  CRUISER_BOSS_BACK: '/src/assets/images/enemy_cruiser_boss_1787090414452.jpg',
-  PLASMA_RIFLE: '/src/assets/images/cyber_plasma_rifle_1787089913135.jpg',
-  PLASMA_RIFLE_FRONT: '/src/assets/images/cyber_plasma_rifle_1787089913135.jpg',
-  PLASMA_RIFLE_BACK: '/src/assets/images/cyber_plasma_rifle_1787089913135.jpg',
-  GAUSS_RAILGUN: '/src/assets/images/gauss_railgun_1787434622054.jpg',
-  BEAM_SABER: '/src/assets/images/beam_saber_1787434660618.jpg',
-  CYBER_PILOT: '/src/assets/images/cyber_pilot_hero_1787089924400.jpg',
-  CYBER_PILOT_FRONT: '/src/assets/images/cyber_pilot_hero_1787089924400.jpg',
-  CYBER_PILOT_BACK: '/src/assets/images/cyber_pilot_hero_1787089924400.jpg',
-  MECH_ARMOR: '/src/assets/images/cyber_mech_armor_1787089900058.jpg',
-  ROMAN_CYBER_MOSAIC: '/src/assets/images/roman_cyber_mosaic_1787188021928.jpg',
-  DEEP_SPACE_NEBULA: '/src/assets/images/deep_space_nebula_1787434647356.jpg',
+  HERO_MECH_FRONT: IMAGE_ASSETS.playerMechHero,
+  HERO_MECH_BACK: IMAGE_ASSETS.playerMechRear,
+  VALKYRIE_GUNDAM: IMAGE_ASSETS.valkyrieGundam,
+  VALKYRIE_FRONT: IMAGE_ASSETS.valkyrieGundam,
+  VALKYRIE_BACK: IMAGE_ASSETS.valkyrieGundam,
+  GOLIATH_TITAN: IMAGE_ASSETS.enemyTpsMech,
+  GOLIATH_FRONT: IMAGE_ASSETS.enemyTpsMech,
+  GOLIATH_BACK: IMAGE_ASSETS.enemyTpsMech,
+  CYBER_DRONE: IMAGE_ASSETS.enemyDroneFighter,
+  CYBER_DRONE_FRONT: IMAGE_ASSETS.enemyDroneFighter,
+  CYBER_DRONE_BACK: IMAGE_ASSETS.enemyDroneFighter,
+  SENTINEL_DROID: IMAGE_ASSETS.enemyFpsSentinel,
+  SENTINEL_FRONT: IMAGE_ASSETS.enemyFpsSentinel,
+  SENTINEL_BACK: IMAGE_ASSETS.enemyFpsSentinel,
+  STARFIGHTER_INTERCEPTOR: IMAGE_ASSETS.spaceStarfighterHero,
+  STARFIGHTER_FRONT: IMAGE_ASSETS.spaceStarfighterHero,
+  STARFIGHTER_BACK: IMAGE_ASSETS.spaceStarfighterHero,
+  STEALTH_CORVETTE: IMAGE_ASSETS.stealthCorvette,
+  STEALTH_CORVETTE_FRONT: IMAGE_ASSETS.stealthCorvette,
+  STEALTH_CORVETTE_BACK: IMAGE_ASSETS.stealthCorvette,
+  CRUISER_BOSS: IMAGE_ASSETS.enemyCruiserBoss,
+  CRUISER_BOSS_FRONT: IMAGE_ASSETS.enemyCruiserBoss,
+  CRUISER_BOSS_BACK: IMAGE_ASSETS.enemyCruiserBoss,
+  PLASMA_RIFLE: IMAGE_ASSETS.cyberPlasmaRifle,
+  PLASMA_RIFLE_FRONT: IMAGE_ASSETS.cyberPlasmaRifle,
+  PLASMA_RIFLE_BACK: IMAGE_ASSETS.cyberPlasmaRifle,
+  GAUSS_RAILGUN: IMAGE_ASSETS.gaussRailgun,
+  BEAM_SABER: IMAGE_ASSETS.beamSaber,
+  CYBER_PILOT: IMAGE_ASSETS.cyberPilotHero,
+  CYBER_PILOT_FRONT: IMAGE_ASSETS.cyberPilotHero,
+  CYBER_PILOT_BACK: IMAGE_ASSETS.cyberPilotHero,
+  MECH_ARMOR: IMAGE_ASSETS.cyberMechArmor,
+  ROMAN_CYBER_MOSAIC: IMAGE_ASSETS.romanCyberMosaic,
+  DEEP_SPACE_NEBULA: IMAGE_ASSETS.deepSpaceNebula,
 };
 
 // Global Image Cache for fast, zero-lag character texture instantiation
@@ -94,7 +95,9 @@ function preloadImage(src: string): HTMLImageElement {
     return imageCache.get(src)!;
   }
   const img = new Image();
-  img.crossOrigin = 'anonymous';
+  if (!src.startsWith('data:') && !src.startsWith('blob:')) {
+    img.crossOrigin = 'anonymous';
+  }
   img.src = src;
   imageCache.set(src, img);
   return img;

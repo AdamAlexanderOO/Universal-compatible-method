@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { CHARACTER_IMAGE_ASSETS, MosaicCharacterType } from './mosaicCharacterRenderer';
+import { loadAppImage } from './imageAssets';
+import { safeLocalStorage } from './safeStorage';
 
 export type CharacterTargetSlot =
   | 'ALL'
@@ -225,14 +227,14 @@ export function getCustomCharacterAssets(): CustomCharacterAsset[] {
 
   if (typeof window !== 'undefined') {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY_CUSTOM_ASSETS);
+      const stored = safeLocalStorage.getItem(STORAGE_KEY_CUSTOM_ASSETS);
       if (stored) {
         const parsed = JSON.parse(stored) as CustomCharacterAsset[];
         customAssetsCache = parsed;
         return parsed;
       }
     } catch (e) {
-      console.warn('Failed to load custom character assets from localStorage', e);
+      console.warn('Failed to load custom character assets from storage', e);
     }
   }
 
@@ -260,9 +262,9 @@ export function saveCustomCharacterAsset(asset: CustomCharacterAsset): void {
   customAssetsCache = updated;
   if (typeof window !== 'undefined') {
     try {
-      localStorage.setItem(STORAGE_KEY_CUSTOM_ASSETS, JSON.stringify(updated));
+      safeLocalStorage.setItem(STORAGE_KEY_CUSTOM_ASSETS, JSON.stringify(updated));
     } catch (e) {
-      console.warn('Failed to persist custom asset to localStorage', e);
+      console.warn('Failed to persist custom asset to storage', e);
     }
   }
 
@@ -276,9 +278,9 @@ export function deleteCustomCharacterAsset(id: string): void {
 
   if (typeof window !== 'undefined') {
     try {
-      localStorage.setItem(STORAGE_KEY_CUSTOM_ASSETS, JSON.stringify(updated));
+      safeLocalStorage.setItem(STORAGE_KEY_CUSTOM_ASSETS, JSON.stringify(updated));
     } catch (e) {
-      console.warn('Failed to delete custom asset from localStorage', e);
+      console.warn('Failed to delete custom asset from storage', e);
     }
   }
 
@@ -304,14 +306,14 @@ export function getActiveCharacterEquipment(): ActiveCharacterEquipment {
 
   if (typeof window !== 'undefined') {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY_ACTIVE_EQUIP);
+      const stored = safeLocalStorage.getItem(STORAGE_KEY_ACTIVE_EQUIP);
       if (stored) {
         const parsed = JSON.parse(stored) as ActiveCharacterEquipment;
         activeEquipmentCache = { ...DEFAULT_EQUIPMENT, ...parsed };
         return activeEquipmentCache;
       }
     } catch (e) {
-      console.warn('Failed to load active equipment from localStorage', e);
+      console.warn('Failed to load active equipment from storage', e);
     }
   }
 
@@ -326,9 +328,9 @@ export function setActiveCharacterEquipment(equip: Partial<ActiveCharacterEquipm
 
   if (typeof window !== 'undefined') {
     try {
-      localStorage.setItem(STORAGE_KEY_ACTIVE_EQUIP, JSON.stringify(updated));
+      safeLocalStorage.setItem(STORAGE_KEY_ACTIVE_EQUIP, JSON.stringify(updated));
     } catch (e) {
-      console.warn('Failed to save active equipment to localStorage', e);
+      console.warn('Failed to save active equipment to storage', e);
     }
   }
 
@@ -705,11 +707,7 @@ export function createCustomAssetThreeTexture(
   texture.minFilter = THREE.LinearMipmapLinearFilter;
   texture.magFilter = THREE.LinearFilter;
 
-  const img = new Image();
-  img.crossOrigin = 'anonymous';
-  img.src = asset.imageUrl;
-
-  const apply = () => {
+  const apply = (img: HTMLImageElement) => {
     const converted = convertImageElementToMosaicCanvas(
       img,
       asset.settings,
@@ -721,11 +719,20 @@ export function createCustomAssetThreeTexture(
     texture.needsUpdate = true;
   };
 
-  if (img.complete && img.naturalWidth > 0) {
-    apply();
-  } else {
-    img.onload = apply;
-  }
+  loadAppImage(
+    asset.imageUrl,
+    (img) => apply(img),
+    () => {
+      // Fallback
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(0, 0, targetWidth, targetHeight);
+      ctx.fillStyle = '#00f0ff';
+      ctx.beginPath();
+      ctx.arc(targetWidth / 2, targetHeight / 2, targetWidth * 0.3, 0, Math.PI * 2);
+      ctx.fill();
+      texture.needsUpdate = true;
+    }
+  );
 
   return texture;
 }

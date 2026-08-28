@@ -67,13 +67,18 @@ export const HologramGearEngine: React.FC<HologramGearEngineProps> = ({
   return (
     <div
       id="hologram-gear-engine"
-      className="relative w-full h-full min-h-[480px] bg-[#0A0A0A] border border-white/10 p-4 sm:p-5 overflow-hidden flex flex-col justify-between select-none"
+      className="relative w-full h-full min-h-[360px] sm:min-h-[440px] border p-3 sm:p-5 overflow-hidden flex flex-col justify-between select-none rounded-lg transition-colors duration-300"
+      style={{
+        backgroundColor: theme.bgDark,
+        borderColor: 'rgba(255, 255, 255, 0.12)',
+        boxShadow: `0 10px 30px rgba(0,0,0,0.8), 0 0 15px ${theme.glowRgba}`,
+      }}
     >
       {/* Header Controls Bar */}
       <div className="relative z-20 flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-white/10">
         <div className="flex items-center gap-2">
-          <div className="p-1.5 border border-white/15 bg-white/5">
-            <Box className="w-4 h-4 text-red-500" />
+          <div className="p-1.5 border border-white/15 bg-white/5 rounded">
+            <Box className="w-4 h-4" style={{ color: theme.primary }} />
           </div>
           <div>
             <h3 className="font-mono text-xs sm:text-sm font-black tracking-widest text-white">
@@ -89,7 +94,7 @@ export const HologramGearEngine: React.FC<HologramGearEngineProps> = ({
         <div className="flex items-center gap-1.5 font-mono text-xs">
           <button
             onClick={cycleViewMode}
-            className="flex items-center gap-1 px-2.5 py-1 border border-white/20 bg-white/5 text-white hover:bg-white/10 active:scale-95 transition-all"
+            className="flex items-center gap-1 px-2.5 py-1 border border-white/20 bg-white/5 text-white hover:bg-white/10 active:scale-95 transition-all rounded"
           >
             <Layers className="w-3 h-3 text-neutral-400" />
             <span className="text-[10px] font-bold">{engineState.viewMode}</span>
@@ -97,9 +102,14 @@ export const HologramGearEngine: React.FC<HologramGearEngineProps> = ({
 
           <button
             onClick={cycleMesh}
-            className="flex items-center gap-1 px-2.5 py-1 border border-red-600/40 bg-red-950/20 text-red-400 hover:bg-red-950/40 active:scale-95 transition-all"
+            className="flex items-center gap-1 px-2.5 py-1 border rounded active:scale-95 transition-all"
+            style={{
+              borderColor: theme.borderPrimary,
+              backgroundColor: theme.badgeBg,
+              color: theme.primary,
+            }}
           >
-            <Sparkles className="w-3 h-3 text-red-500" />
+            <Sparkles className="w-3 h-3" style={{ color: theme.primary }} />
             <span className="text-[10px] font-bold">{engineState.meshType}</span>
           </button>
         </div>
@@ -370,15 +380,20 @@ export const HologramGearEngine: React.FC<HologramGearEngineProps> = ({
 
       {/* Bottom Layer Toggle Switches */}
       <div className="relative z-20 pt-3 border-t border-white/10 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
           {/* Toggle Layer 1 */}
           <button
             onClick={() => toggleLayer('holographicWireframe')}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 border text-[11px] font-mono font-bold transition-all ${
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 border text-[11px] font-mono font-bold transition-all rounded active:scale-95 ${
               engineState.visibleLayers.holographicWireframe
-                ? 'border-red-600 bg-red-950/40 text-red-400'
-                : 'border-white/15 bg-white/5 text-neutral-500'
+                ? 'text-white'
+                : 'border-white/15 bg-white/5 text-neutral-500 hover:text-neutral-300'
             }`}
+            style={{
+              borderColor: engineState.visibleLayers.holographicWireframe ? theme.borderPrimary : undefined,
+              backgroundColor: engineState.visibleLayers.holographicWireframe ? theme.badgeBg : undefined,
+              color: engineState.visibleLayers.holographicWireframe ? theme.primary : undefined,
+            }}
           >
             {engineState.visibleLayers.holographicWireframe ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
             <span>HOLOGRAM</span>
@@ -387,10 +402,10 @@ export const HologramGearEngine: React.FC<HologramGearEngineProps> = ({
           {/* Toggle Layer 2 */}
           <button
             onClick={() => toggleLayer('siliconPcb')}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 border text-[11px] font-mono font-bold transition-all ${
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 border text-[11px] font-mono font-bold transition-all rounded active:scale-95 ${
               engineState.visibleLayers.siliconPcb
                 ? 'border-white bg-white/15 text-white'
-                : 'border-white/15 bg-white/5 text-neutral-500'
+                : 'border-white/15 bg-white/5 text-neutral-500 hover:text-neutral-300'
             }`}
           >
             {engineState.visibleLayers.siliconPcb ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
@@ -400,10 +415,10 @@ export const HologramGearEngine: React.FC<HologramGearEngineProps> = ({
           {/* Toggle Layer 3 */}
           <button
             onClick={() => toggleLayer('mechanicalGears')}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 border text-[11px] font-mono font-bold transition-all ${
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 border text-[11px] font-mono font-bold transition-all rounded active:scale-95 ${
               engineState.visibleLayers.mechanicalGears
                 ? 'border-white bg-white/15 text-white'
-                : 'border-white/15 bg-white/5 text-neutral-500'
+                : 'border-white/15 bg-white/5 text-neutral-500 hover:text-neutral-300'
             }`}
           >
             {engineState.visibleLayers.mechanicalGears ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
@@ -412,8 +427,14 @@ export const HologramGearEngine: React.FC<HologramGearEngineProps> = ({
         </div>
 
         {/* Selected Component Status */}
-        <div className="text-[10px] font-mono text-neutral-400">
-          STATUS: <span className="text-red-500 font-bold">{powerOn ? 'RESONATING' : 'IDLE'}</span>
+        <div className="text-[10px] font-mono text-neutral-400 flex items-center gap-1.5">
+          <span>STATUS:</span>
+          <span
+            className="font-bold uppercase tracking-wider"
+            style={{ color: powerOn ? theme.primary : '#737373' }}
+          >
+            {powerOn ? 'RESONATING' : 'IDLE'}
+          </span>
         </div>
       </div>
     </div>

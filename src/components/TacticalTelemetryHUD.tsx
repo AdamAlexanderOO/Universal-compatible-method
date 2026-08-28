@@ -11,11 +11,14 @@ import {
   Target,
   Sparkles,
   Zap,
+  Globe,
 } from 'lucide-react';
 import { TelemetryState, RadarAnomaly, TerminalLog } from '../types';
 import { AppThemeConfig, APP_THEMES } from '../utils/theme';
 import { sounds } from '../utils/soundEffects';
 import { haptics } from '../utils/haptics';
+import { CosmicHyperRadarModule } from './CosmicHyperRadarModule';
+import { dispatchAlert } from '../utils/alertTickerBus';
 
 interface TacticalTelemetryHUDProps {
   powerOn: boolean;
@@ -36,6 +39,7 @@ export const TacticalTelemetryHUD: React.FC<TacticalTelemetryHUDProps> = ({
   fluxFrequency,
   theme = APP_THEMES.CRIMSON_CYBERPUNK,
 }) => {
+  const [radarMode, setRadarMode] = useState<'TACTICAL_50AU' | 'TRILLION_PARSEC'>('TRILLION_PARSEC');
   const [radarAngle, setRadarAngle] = useState(0);
   const [selectedTube, setSelectedTube] = useState<string | null>(null);
   const [activeBlipId, setActiveBlipId] = useState<string | null>(null);
@@ -94,6 +98,15 @@ export const TacticalTelemetryHUD: React.FC<TacticalTelemetryHUDProps> = ({
     setLastDetectedId(anomaly.id);
     setScanPulseKey((k) => k + 1);
     onSelectAnomaly(anomaly);
+
+    dispatchAlert({
+      title: `RADAR LOCK: ${anomaly.label}`,
+      description: `Tactical telemetry signature ${anomaly.signature} acquired at ${anomaly.coordinates}.`,
+      severity: anomaly.severity === 'CRITICAL' ? 'CRITICAL' : anomaly.severity === 'ELEVATED' ? 'WARN' : 'INFO',
+      category: 'RADAR',
+      coordinates: anomaly.coordinates,
+      source: 'TACTICAL_HUD',
+    });
   };
 
   const handleInterceptTarget = () => {
@@ -101,62 +114,120 @@ export const TacticalTelemetryHUD: React.FC<TacticalTelemetryHUDProps> = ({
     haptics.trigger('warning');
     setInterceptSuccess(true);
     setTimeout(() => setInterceptSuccess(false), 2200);
+
+    if (selectedAnomaly) {
+      dispatchAlert({
+        title: `TARGET INTERCEPT: ${selectedAnomaly.label}`,
+        description: `Photon harmonic disruption beam locked onto ${selectedAnomaly.signature}. Intercept trajectory confirmed.`,
+        severity: 'SUCCESS',
+        category: 'COMBAT',
+        source: 'TACTICAL_HUD',
+      });
+    }
   };
 
   return (
-    <div
-      id="tactical-hud-console"
-      className="relative w-full h-full min-h-[500px] border p-4 sm:p-5 overflow-hidden flex flex-col justify-between select-none font-mono"
-      style={{
-        backgroundColor: theme.bgDark,
-        borderColor: 'rgba(255, 255, 255, 0.1)',
-      }}
-    >
-      {/* Background HUD Grid Lines */}
-      <div className="absolute inset-0 bg-[radial-gradient(rgba(255,255,255,0.06)_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
-
-      {/* Top Header & Tactical Coordinates */}
-      <div className="relative z-10 flex items-center justify-between pb-3 border-b border-white/10">
+    <div className="flex flex-col gap-3 font-mono">
+      {/* Master Radar Mode Switcher */}
+      <div className="flex items-center justify-between p-2 rounded-lg border border-white/10 bg-neutral-950/90 gap-2 flex-wrap">
         <div className="flex items-center gap-2">
-          <Crosshair
-            className="w-4 h-4 animate-spin"
-            style={{ color: theme.primary, animationDuration: '12s' }}
-          />
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-xs sm:text-sm font-black tracking-widest text-white">
-                TACTICAL TELEMETRY // HUD COMMAND
-              </span>
-              <span
-                className="px-1.5 py-0.2 text-[9px] font-bold rounded"
-                style={{ backgroundColor: theme.badgeBg, color: theme.primary }}
-              >
-                RADAR ACTIVE
-              </span>
-            </div>
-            <div className="text-[9px] font-mono text-neutral-400">
-              SECTOR 07-GRID-ALPHA | FREQ: {(fluxFrequency * 12.4).toFixed(1)} MHz
-            </div>
-          </div>
+          <Globe className="w-4 h-4 text-cyan-400 animate-spin" style={{ animationDuration: '20s' }} />
+          <span className="text-xs font-bold text-white uppercase tracking-wider">RADAR RESOLUTION MATRIX:</span>
         </div>
-
-        {/* Status Badges */}
-        <div className="flex items-center gap-2 font-mono text-[10px]">
-          <span className="px-2 py-0.5 border border-white/20 bg-white/5 text-white">
-            GRID: ACTIVE
-          </span>
-          <span
-            className="px-2 py-0.5 border"
-            style={{
-              borderColor: theme.borderPrimary,
-              backgroundColor: theme.badgeBg,
-              color: theme.primary,
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => {
+              setRadarMode('TRILLION_PARSEC');
+              sounds.playClick(850);
+              haptics.trigger('click');
             }}
+            className={`px-3 py-1.5 rounded text-xs font-bold transition-all flex items-center gap-1.5 border ${
+              radarMode === 'TRILLION_PARSEC'
+                ? 'bg-cyan-500 text-black border-cyan-400 shadow-[0_0_15px_rgba(0,240,255,0.4)]'
+                : 'bg-neutral-900 text-neutral-400 border-white/10 hover:text-white'
+            }`}
           >
-            ANOMALIES: {telemetry.radarAnomalies.length}
-          </span>
+            <Zap className="w-3.5 h-3.5 fill-current" />
+            <span>TRILLION-PARSEC HYPER-ARRAY</span>
+            <span className="px-1 py-0.2 text-[8px] bg-red-600 text-white rounded font-black">10¹⁴ pc</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setRadarMode('TACTICAL_50AU');
+              sounds.playClick(650);
+              haptics.trigger('click');
+            }}
+            className={`px-3 py-1.5 rounded text-xs font-bold transition-all flex items-center gap-1.5 border ${
+              radarMode === 'TACTICAL_50AU'
+                ? 'bg-amber-500 text-black border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.4)]'
+                : 'bg-neutral-900 text-neutral-400 border-white/10 hover:text-white'
+            }`}
+          >
+            <Crosshair className="w-3.5 h-3.5" />
+            <span>SECTOR TACTICAL HUD (50 AU)</span>
+          </button>
         </div>
       </div>
+
+      {radarMode === 'TRILLION_PARSEC' ? (
+        <CosmicHyperRadarModule powerOn={powerOn} theme={theme} />
+      ) : (
+        <div
+          id="tactical-hud-console"
+          className="relative w-full h-full min-h-[500px] border p-4 sm:p-5 overflow-hidden flex flex-col justify-between select-none font-mono rounded-lg"
+          style={{
+            backgroundColor: theme.bgDark,
+            borderColor: 'rgba(255, 255, 255, 0.1)',
+          }}
+        >
+          {/* Background HUD Grid Lines */}
+          <div className="absolute inset-0 bg-[radial-gradient(rgba(255,255,255,0.06)_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
+
+          {/* Top Header & Tactical Coordinates */}
+          <div className="relative z-10 flex items-center justify-between pb-3 border-b border-white/10">
+            <div className="flex items-center gap-2">
+              <Crosshair
+                className="w-4 h-4 animate-spin"
+                style={{ color: theme.primary, animationDuration: '12s' }}
+              />
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-xs sm:text-sm font-black tracking-widest text-white">
+                    TACTICAL TELEMETRY // HUD COMMAND
+                  </span>
+                  <span
+                    className="px-1.5 py-0.2 text-[9px] font-bold rounded"
+                    style={{ backgroundColor: theme.badgeBg, color: theme.primary }}
+                  >
+                    RADAR ACTIVE
+                  </span>
+                </div>
+                <div className="text-[9px] font-mono text-neutral-400">
+                  SECTOR 07-GRID-ALPHA | FREQ: {(fluxFrequency * 12.4).toFixed(1)} MHz
+                </div>
+              </div>
+            </div>
+
+            {/* Status Badges */}
+            <div className="flex items-center gap-2 font-mono text-[10px]">
+              <span className="px-2 py-0.5 border border-white/20 bg-white/5 text-white">
+                GRID: ACTIVE
+              </span>
+              <span
+                className="px-2 py-0.5 border"
+                style={{
+                  borderColor: theme.borderPrimary,
+                  backgroundColor: theme.badgeBg,
+                  color: theme.primary,
+                }}
+              >
+                ANOMALIES: {telemetry.radarAnomalies.length}
+              </span>
+            </div>
+          </div>
 
       {/* Main HUD Body: 3-Column Layout */}
       <div className="relative z-10 my-3 grid grid-cols-1 lg:grid-cols-12 gap-3.5">
@@ -578,6 +649,8 @@ export const TacticalTelemetryHUD: React.FC<TacticalTelemetryHUDProps> = ({
           </motion.div>
         )}
       </AnimatePresence>
+        </div>
+      )}
     </div>
   );
 };

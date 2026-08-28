@@ -45,6 +45,7 @@ import {
   SOFT_MOSAIC_SMOOTH_KERNEL,
   applyAiBilinearUpscaleWithNoiseReduction,
 } from '../utils/mosaicCharacterRenderer';
+import { IMAGE_ASSETS, loadAppImage } from '../utils/imageAssets';
 
 interface RomanMosaicEngineProps {
   powerOn: boolean;
@@ -72,7 +73,7 @@ const PRESET_PROFILES: KnownImageProfile[] = [
     name: 'Assault Mech Prime (Front)',
     category: 'Playable TPS Operative',
     gameRole: 'PLAYABLE',
-    src: '/src/assets/images/player_mech_hero_1787187990637.jpg',
+    src: IMAGE_ASSETS.playerMechHero,
     dominantColors: ['#00f0ff', '#1e3a8a', '#94a3b8', '#ef4444'],
     characteristicLines: ['Vertical Torso Spine (90°)', 'Shoulder Pod Diagonals (45°)', 'Visor Slit Horizon (0°)', 'Leg Actuator V-Form (60°)'],
     complexityIndex: 92,
@@ -84,7 +85,7 @@ const PRESET_PROFILES: KnownImageProfile[] = [
     name: 'Assault Mech Prime (Rear / Thrusters)',
     category: 'Playable TPS Operative',
     gameRole: 'PLAYABLE',
-    src: '/src/assets/images/player_mech_rear_1787188006708.jpg',
+    src: IMAGE_ASSETS.playerMechRear,
     dominantColors: ['#00f0ff', '#0f172a', '#3b82f6', '#f59e0b'],
     characteristicLines: ['Twin Ion Thruster Bell (r=18)', 'Spinal Heat Exchanger Grid', 'Shoulder Shield Contour', 'Calf Stabilizer Fin (75°)'],
     complexityIndex: 94,
@@ -96,7 +97,7 @@ const PRESET_PROFILES: KnownImageProfile[] = [
     name: 'Vanguard Starfighter Interceptor',
     category: 'Playable 3D Space Craft',
     gameRole: 'PLAYABLE',
-    src: '/src/assets/images/space_starfighter_hero_1787089887255.jpg',
+    src: IMAGE_ASSETS.spaceStarfighterHero,
     dominantColors: ['#38bdf8', '#0284c7', '#0f172a', '#fbbf24'],
     characteristicLines: ['Delta Wing Sweeps (35°)', 'Twin Thruster Vectors', 'Cockpit Canopy Ellipse', 'Plasma Core Axial'],
     complexityIndex: 88,
@@ -108,7 +109,7 @@ const PRESET_PROFILES: KnownImageProfile[] = [
     name: 'Neural Pilot Operator',
     category: 'Player Bio-Cyber Avatar',
     gameRole: 'PILOT',
-    src: '/src/assets/images/cyber_pilot_hero_1787089924400.jpg',
+    src: IMAGE_ASSETS.cyberPilotHero,
     dominantColors: ['#a855f7', '#ec4899', '#0f172a', '#06b6d4'],
     characteristicLines: ['HUD Reticle Circle (r=42)', 'Synaptic Cervical Arc', 'Visor Reflection Band', 'Collar Trace Segment'],
     complexityIndex: 91,
@@ -120,7 +121,7 @@ const PRESET_PROFILES: KnownImageProfile[] = [
     name: 'Tactical Mech Armor Core',
     category: 'Player Armor Rig',
     gameRole: 'PLAYABLE',
-    src: '/src/assets/images/cyber_mech_armor_1787089900058.jpg',
+    src: IMAGE_ASSETS.cyberMechArmor,
     dominantColors: ['#38bdf8', '#1e293b', '#64748b', '#00f0ff'],
     characteristicLines: ['Pectoral Chobham Angles (48°)', 'Nanite Grout Seam', 'Reactor Core Well', 'Pauldrons Bevel Trace'],
     complexityIndex: 89,
@@ -132,7 +133,7 @@ const PRESET_PROFILES: KnownImageProfile[] = [
     name: 'Ion Plasma Rifle',
     category: 'Player Primary Weapon',
     gameRole: 'WEAPON',
-    src: '/src/assets/images/cyber_plasma_rifle_1787089913135.jpg',
+    src: IMAGE_ASSETS.cyberPlasmaRifle,
     dominantColors: ['#00f0ff', '#1e1b4b', '#0369a1', '#f43f5e'],
     characteristicLines: ['Barrel Magnetic Rails (0°)', 'Optic Hologram Scope (r=24)', 'Receiver Heat Vent Stack', 'Grip Angular Ergonomics'],
     complexityIndex: 86,
@@ -144,7 +145,7 @@ const PRESET_PROFILES: KnownImageProfile[] = [
     name: 'Goliath Titan Boss',
     category: 'Rogue Heavy Siege Mech',
     gameRole: 'BOSS',
-    src: '/src/assets/images/enemy_tps_mech_1787090446411.jpg',
+    src: IMAGE_ASSETS.enemyTpsMech,
     dominantColors: ['#ef4444', '#7f1d1d', '#18181b', '#f59e0b'],
     characteristicLines: ['Armor Horn Angulation (55°)', 'Central Core Arc (r=35)', 'Leg Piston Vectors', 'Shoulder Missile Battery Grid'],
     complexityIndex: 96,
@@ -156,7 +157,7 @@ const PRESET_PROFILES: KnownImageProfile[] = [
     name: 'Combat Sentinel Droid',
     category: 'Autonomous Security Unit',
     gameRole: 'ENEMY',
-    src: '/src/assets/images/enemy_fps_sentinel_1787090428781.jpg',
+    src: IMAGE_ASSETS.enemyFpsSentinel,
     dominantColors: ['#d946ef', '#4a044e', '#38bdf8', '#ff0055'],
     characteristicLines: ['Hexagonal Shell Array (60°)', 'Ocular Optic Trace', 'Hover Thruster Field', 'EMP Deflector Loop'],
     complexityIndex: 90,
@@ -168,7 +169,7 @@ const PRESET_PROFILES: KnownImageProfile[] = [
     name: 'Tri-Rotor Recon Drone',
     category: 'Fast Attack Combat Drone',
     gameRole: 'ENEMY',
-    src: '/src/assets/images/enemy_drone_fighter_1787090400681.jpg',
+    src: IMAGE_ASSETS.enemyDroneFighter,
     dominantColors: ['#06b6d4', '#0f172a', '#22d3ee', '#e11d48'],
     characteristicLines: ['Tri-Rotor Y-Form (120°)', 'Pylon Strut Radians', 'Sensor Turret Bulb', 'Exhaust Ion Nozzle'],
     complexityIndex: 85,
@@ -180,7 +181,7 @@ const PRESET_PROFILES: KnownImageProfile[] = [
     name: 'Armada Battlecruiser Flagship',
     category: 'Capital Dreadnought Boss',
     gameRole: 'BOSS',
-    src: '/src/assets/images/enemy_cruiser_boss_1787090414452.jpg',
+    src: IMAGE_ASSETS.enemyCruiserBoss,
     dominantColors: ['#dc2626', '#450a0a', '#172554', '#fbbf24'],
     characteristicLines: ['Spine Catwalk Keel (0°)', 'Superstructure Tier Steps', 'Main Turret Ring Array', 'Broadside Flak Ports'],
     complexityIndex: 98,
@@ -192,7 +193,7 @@ const PRESET_PROFILES: KnownImageProfile[] = [
     name: 'Imperium Tesserae Visage',
     category: 'Ancient Cyber-Relic Core',
     gameRole: 'RELIC',
-    src: '/src/assets/images/roman_cyber_mosaic_1787188021928.jpg',
+    src: IMAGE_ASSETS.romanCyberMosaic,
     dominantColors: ['#f59e0b', '#dc2626', '#1e293b', '#38bdf8'],
     characteristicLines: ['Arch of Titus Curve (32°)', 'Grout Matrix Grid 4x4', 'Visor Horizontal Cut', 'Crown Tesserae Radial'],
     complexityIndex: 95,
@@ -204,7 +205,7 @@ const PRESET_PROFILES: KnownImageProfile[] = [
     name: 'Valkyrie Aerial Gundam Frame',
     category: 'Playable Mobile Suit Gundam',
     gameRole: 'PLAYABLE',
-    src: '/src/assets/images/valkyrie_gundam_1787434609815.jpg',
+    src: IMAGE_ASSETS.valkyrieGundam,
     dominantColors: ['#38bdf8', '#fbbf24', '#f43f5e', '#0f172a'],
     characteristicLines: ['V-Fin Antenna Crest (45°)', 'Wing Binder Sweeps (60°)', 'Chest Reactor Well', 'Leg Armor Articulation (75°)'],
     complexityIndex: 97,
@@ -216,7 +217,7 @@ const PRESET_PROFILES: KnownImageProfile[] = [
     name: 'Heavy Gauss Railgun Cannon',
     category: 'Heavy Kinetic Weapon',
     gameRole: 'WEAPON',
-    src: '/src/assets/images/gauss_railgun_1787434622054.jpg',
+    src: IMAGE_ASSETS.gaussRailgun,
     dominantColors: ['#00f0ff', '#1e293b', '#3b82f6', '#f59e0b'],
     characteristicLines: ['Twin Linear Accelerator Rails (0°)', 'Superconducting Magnetic Coils (r=16)', 'Heatsink Fin Array', 'Capacitor Bank Segment'],
     complexityIndex: 91,
@@ -228,7 +229,7 @@ const PRESET_PROFILES: KnownImageProfile[] = [
     name: 'Shadow Stealth Corvette Warship',
     category: 'Tactical Space Warship',
     gameRole: 'PLAYABLE',
-    src: '/src/assets/images/stealth_corvette_1787434635548.jpg',
+    src: IMAGE_ASSETS.stealthCorvette,
     dominantColors: ['#00f0ff', '#090d16', '#334155', '#38bdf8'],
     characteristicLines: ['Radar-Absorbing Facet Angles (28°)', 'Concealed Missile Bay Hatches', 'Sub-Light Engine Exhaust Nozzle', 'Forward ECM Array'],
     complexityIndex: 93,
@@ -240,7 +241,7 @@ const PRESET_PROFILES: KnownImageProfile[] = [
     name: 'Deep Space Cosmic Nebula Vista',
     category: 'Cosmic Stellar Environment',
     gameRole: 'RELIC',
-    src: '/src/assets/images/deep_space_nebula_1787434647356.jpg',
+    src: IMAGE_ASSETS.deepSpaceNebula,
     dominantColors: ['#c084fc', '#06b6d4', '#020617', '#f472b6'],
     characteristicLines: ['Stellar Dust Filament Curves', 'Ionized Gas Vortex Arc (r=120)', 'Protostar Cluster Vectors', 'Bipolar Outflow Jet'],
     complexityIndex: 96,
@@ -252,7 +253,7 @@ const PRESET_PROFILES: KnownImageProfile[] = [
     name: 'Hyper-Beam Particle Saber',
     category: 'Melee Energy Weapon',
     gameRole: 'WEAPON',
-    src: '/src/assets/images/beam_saber_1787434660618.jpg',
+    src: IMAGE_ASSETS.beamSaber,
     dominantColors: ['#ec4899', '#f43f5e', '#38bdf8', '#1e1b4b'],
     characteristicLines: ['Plasma Blade Containment Cylinder (90°)', 'Emitter Ring Corona (r=12)', 'Hilt Inscription Roman Grout', 'Power Cell Socket Base'],
     complexityIndex: 88,
@@ -392,11 +393,7 @@ export const RomanMosaicMatrixEngine: React.FC<RomanMosaicEngineProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.src = customImageSrc || selectedProfile.src;
-
-    img.onload = () => {
+    const renderWithLoadedImage = (img: HTMLImageElement) => {
       const w = canvas.width;
       const h = canvas.height;
       ctx.clearRect(0, 0, w, h);
@@ -643,6 +640,36 @@ export const RomanMosaicMatrixEngine: React.FC<RomanMosaicEngineProps> = ({
         }
       }
     };
+
+    const targetSrc = customImageSrc || selectedProfile.src;
+    const cleanup = loadAppImage(
+      targetSrc,
+      (img) => {
+        renderWithLoadedImage(img);
+      },
+      () => {
+        // Fallback procedural mosaic image
+        const fallbackCanvas = document.createElement('canvas');
+        fallbackCanvas.width = 128;
+        fallbackCanvas.height = 128;
+        const fCtx = fallbackCanvas.getContext('2d');
+        if (fCtx) {
+          fCtx.fillStyle = selectedProfile.dominantColors[0] || '#00f0ff';
+          fCtx.fillRect(0, 0, 128, 128);
+          fCtx.fillStyle = selectedProfile.dominantColors[1] || '#0f172a';
+          fCtx.beginPath();
+          fCtx.arc(64, 64, 45, 0, Math.PI * 2);
+          fCtx.fill();
+        }
+        const fallbackImg = new Image();
+        fallbackImg.onload = () => renderWithLoadedImage(fallbackImg);
+        fallbackImg.src = fallbackCanvas.toDataURL();
+      }
+    );
+
+    return () => {
+      cleanup();
+    };
   }, [
     powerOn,
     selectedProfile,
@@ -860,11 +887,7 @@ export const RomanMosaicMatrixEngine: React.FC<RomanMosaicEngineProps> = ({
     group.add(gridHelper);
 
     // Sample Image for 3D Mesh
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.src = customImageSrc || selectedProfile.src;
-
-    img.onload = () => {
+    const build3DSceneWithImage = (img: HTMLImageElement) => {
       // Dynamic Ultra-HD / High Clarity Grid Sizing
       const sampleCols =
         hologramResolution === 'ULTRA_HD'
@@ -1015,7 +1038,29 @@ export const RomanMosaicMatrixEngine: React.FC<RomanMosaicEngineProps> = ({
       animate();
     };
 
+    const targetSrc = customImageSrc || selectedProfile.src;
+    const cleanup = loadAppImage(
+      targetSrc,
+      (img) => {
+        build3DSceneWithImage(img);
+      },
+      () => {
+        const fallbackCanvas = document.createElement('canvas');
+        fallbackCanvas.width = 64;
+        fallbackCanvas.height = 64;
+        const fCtx = fallbackCanvas.getContext('2d');
+        if (fCtx) {
+          fCtx.fillStyle = selectedProfile.dominantColors[0] || '#00f0ff';
+          fCtx.fillRect(0, 0, 64, 64);
+        }
+        const fallbackImg = new Image();
+        fallbackImg.onload = () => build3DSceneWithImage(fallbackImg);
+        fallbackImg.src = fallbackCanvas.toDataURL();
+      }
+    );
+
     return () => {
+      cleanup();
       if (threeSceneRef.current) {
         if (threeSceneRef.current.reqId) {
           cancelAnimationFrame(threeSceneRef.current.reqId);

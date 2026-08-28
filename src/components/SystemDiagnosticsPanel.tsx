@@ -159,68 +159,78 @@ Cap Target: ${targetFpsCap}
   const fpsColor = fps >= 55 ? '#10b981' : fps >= 30 ? '#f59e0b' : '#ef4444';
 
   return (
-    <motion.aside
-      initial={{ opacity: 0, y: 30, scale: 0.95 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: 20, scale: 0.95 }}
-      id="system-diagnostics-floating-panel"
-      aria-label="System Diagnostics"
-      className={`fixed bottom-4 right-4 z-50 font-mono select-none border transition-all duration-300 ${
-        isMinimized ? 'w-64' : 'w-80 sm:w-96'
-      }`}
-      style={{
-        backgroundColor: 'rgba(8, 8, 12, 0.96)',
-        borderColor: theme.borderPrimary,
-        boxShadow: `0 10px 35px rgba(0, 0, 0, 0.85), 0 0 20px ${theme.glowRgba}`,
-      }}
-    >
-      {/* Top Header Bar */}
-      <div
-        className="flex items-center justify-between px-3 py-2 border-b cursor-move"
-        style={{ borderColor: 'rgba(255, 255, 255, 0.1)', backgroundColor: 'rgba(255, 255, 255, 0.03)' }}
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-start justify-end p-2 sm:p-4 pointer-events-auto select-none"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) onClose();
+        }}
       >
-        <div className="flex items-center gap-2">
-          <Activity className="w-3.5 h-3.5 animate-pulse" style={{ color: theme.primary }} />
-          <span className="text-xs font-black tracking-widest text-white uppercase">
-            SYSTEM DIAGNOSTICS
-          </span>
-          <span
-            className="px-1.5 py-0.2 text-[9px] font-bold rounded"
-            style={{ backgroundColor: theme.badgeBg, color: theme.primary }}
+        <motion.aside
+          initial={{ opacity: 0, y: 30, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 20, scale: 0.95 }}
+          id="system-diagnostics-floating-panel"
+          aria-label="System Diagnostics"
+          className={`w-full sm:w-96 max-h-[85vh] overflow-y-auto font-mono border rounded-lg shadow-2xl transition-all duration-300 ${
+            isMinimized ? 'max-w-xs' : 'max-w-md'
+          }`}
+          style={{
+            backgroundColor: 'rgba(8, 8, 12, 0.98)',
+            borderColor: theme.borderPrimary,
+            boxShadow: `0 15px 40px rgba(0, 0, 0, 0.95), 0 0 20px ${theme.glowRgba}`,
+          }}
+        >
+          {/* Top Header Bar */}
+          <div
+            className="flex items-center justify-between px-3 py-2 border-b"
+            style={{ borderColor: 'rgba(255, 255, 255, 0.1)', backgroundColor: 'rgba(255, 255, 255, 0.04)' }}
           >
-            LIVE
-          </span>
-        </div>
+            <div className="flex items-center gap-2">
+              <Activity className="w-4 h-4 animate-pulse" style={{ color: theme.primary }} />
+              <span className="text-xs font-black tracking-widest text-white uppercase">
+                SYSTEM DIAGNOSTICS
+              </span>
+              <span
+                className="px-1.5 py-0.5 text-[9px] font-bold rounded"
+                style={{ backgroundColor: theme.badgeBg, color: theme.primary }}
+              >
+                LIVE
+              </span>
+            </div>
 
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => {
-              sounds.playClick(700);
-              haptics.trigger('light');
-              setIsMinimized(!isMinimized);
-            }}
-            className="p-1 rounded text-neutral-400 hover:text-white transition-colors"
-            title={isMinimized ? 'Expand Telemetry' : 'Minimize Telemetry'}
-            aria-label={isMinimized ? 'Expand Telemetry' : 'Minimize Telemetry'}
-          >
-            {isMinimized ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              sounds.playClick(600);
-              haptics.trigger('click');
-              onClose();
-            }}
-            className="p-1 rounded text-neutral-400 hover:text-red-400 transition-colors"
-            title="Close Diagnostics Panel"
-            aria-label="Close Diagnostics Panel"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      </div>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => {
+                  sounds.playClick(700);
+                  haptics.trigger('light');
+                  setIsMinimized(!isMinimized);
+                }}
+                className="p-1.5 rounded text-neutral-400 hover:text-white hover:bg-white/10 transition-colors"
+                title={isMinimized ? 'Expand Telemetry' : 'Minimize Telemetry'}
+                aria-label={isMinimized ? 'Expand Telemetry' : 'Minimize Telemetry'}
+              >
+                {isMinimized ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  sounds.playClick(600);
+                  haptics.trigger('click');
+                  onClose();
+                }}
+                className="p-1.5 rounded text-neutral-400 hover:text-red-400 hover:bg-white/10 transition-colors"
+                title="Close Diagnostics Panel"
+                aria-label="Close Diagnostics Panel"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
 
       {/* Minimized Pill View */}
       {isMinimized ? (
@@ -396,6 +406,8 @@ Cap Target: ${targetFpsCap}
           </div>
         </div>
       )}
-    </motion.aside>
+        </motion.aside>
+      </motion.div>
+    </AnimatePresence>
   );
 };

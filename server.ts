@@ -296,6 +296,20 @@ Return JSON with:
     }
   });
 
+  // Static assets serving with CORS headers for seamless Canvas & WebGL texture ingestion
+  const serveStaticOptions = {
+    setHeaders: (res: express.Response) => {
+      res.set("Access-Control-Allow-Origin", "*");
+      res.set("Cross-Origin-Resource-Policy", "cross-origin");
+      res.set("Cache-Control", "public, max-age=3600");
+    },
+  };
+  app.use("/public", express.static(path.join(process.cwd(), "public"), serveStaticOptions));
+  app.use("/assets", express.static(path.join(process.cwd(), "public", "assets"), serveStaticOptions));
+  app.use("/images", express.static(path.join(process.cwd(), "public", "images"), serveStaticOptions));
+  app.use("/src/assets", express.static(path.join(process.cwd(), "src", "assets"), serveStaticOptions));
+  app.use(express.static(path.join(process.cwd(), "public"), serveStaticOptions));
+
   // Vite middleware for development vs static build in production
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

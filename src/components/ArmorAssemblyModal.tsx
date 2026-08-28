@@ -25,6 +25,7 @@ import gsap from 'gsap';
 import { sounds } from '../utils/soundEffects';
 import { haptics } from '../utils/haptics';
 import { AppThemeConfig } from '../utils/theme';
+import { IMAGE_ASSETS, loadAppImage } from '../utils/imageAssets';
 
 export interface LoadoutSlot {
   id: 'HEAD' | 'CHEST' | 'RIGHT_ARM' | 'LEFT_ARM' | 'SHOULDERS' | 'LEGS';
@@ -83,7 +84,7 @@ const ARMOR_ASSEMBLY_SETS: ArmorAssemblySet[] = [
     id: 'VALKYRIE_GUNDAM',
     name: 'Valkyrie Aerial Gundam Frame',
     category: 'High-Mobility Mobile Suit',
-    src: '/src/assets/images/valkyrie_gundam_1787434609815.jpg',
+    src: IMAGE_ASSETS.valkyrieGundam,
     description: 'Gold-inlaid Roman mosaic mobile suit with quantum aerodynamic wing binders and hyper-plasma chest core.',
     dominantColors: ['#38bdf8', '#fbbf24', '#f43f5e', '#0f172a'],
     tiles: [
@@ -159,7 +160,7 @@ const ARMOR_ASSEMBLY_SETS: ArmorAssemblySet[] = [
     id: 'ASSAULT_MECH_PRIME',
     name: 'Assault Mech Prime Exo-Chassis',
     category: 'Heavy Tactical Armor',
-    src: '/src/assets/images/player_mech_hero_1787187990637.jpg',
+    src: IMAGE_ASSETS.playerMechHero,
     description: 'Chobham-reinforced heavy stone tesserae chassis built for frontline breach warfare.',
     dominantColors: ['#00f0ff', '#1e3a8a', '#94a3b8', '#ef4444'],
     tiles: [
@@ -235,7 +236,7 @@ const ARMOR_ASSEMBLY_SETS: ArmorAssemblySet[] = [
     id: 'GAUSS_RAILGUN_RIG',
     name: 'Heavy Gauss Railgun Weapon Set',
     category: 'Kinetic Weapon Arsenal',
-    src: '/src/assets/images/gauss_railgun_1787434622054.jpg',
+    src: IMAGE_ASSETS.gaussRailgun,
     description: 'Hyper-kinetic linear accelerator battery engineered with superconducting quantum transistor gates.',
     dominantColors: ['#00f0ff', '#1e293b', '#3b82f6', '#f59e0b'],
     tiles: [
@@ -289,7 +290,7 @@ const ARMOR_ASSEMBLY_SETS: ArmorAssemblySet[] = [
     id: 'BEAM_SABER_RIG',
     name: 'Hyper-Beam Saber & Melee Rig',
     category: 'Energy Melee Arsenal',
-    src: '/src/assets/images/beam_saber_1787434660618.jpg',
+    src: IMAGE_ASSETS.beamSaber,
     description: 'High-frequency thermal plasma blade with etched Roman mosaic hilt and force barrier.',
     dominantColors: ['#ec4899', '#f43f5e', '#38bdf8', '#1e1b4b'],
     tiles: [
@@ -375,11 +376,7 @@ export const ArmorAssemblyModal: React.FC<ArmorAssemblyModalProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.src = selectedSet.src;
-
-    img.onload = () => {
+    const renderMosaicWithImage = (img: HTMLImageElement) => {
       const w = canvas.width;
       const h = canvas.height;
       ctx.clearRect(0, 0, w, h);
@@ -496,6 +493,35 @@ export const ArmorAssemblyModal: React.FC<ArmorAssemblyModalProps> = ({
       ctx.lineTo(w, h / 2);
       ctx.stroke();
       ctx.setLineDash([]);
+    };
+
+    const cleanup = loadAppImage(
+      selectedSet.src,
+      (img) => {
+        renderMosaicWithImage(img);
+      },
+      () => {
+        // Fallback procedural mosaic if image not available
+        const fallbackCanvas = document.createElement('canvas');
+        fallbackCanvas.width = 128;
+        fallbackCanvas.height = 128;
+        const fCtx = fallbackCanvas.getContext('2d');
+        if (fCtx) {
+          fCtx.fillStyle = selectedSet.dominantColors[0] || '#00f0ff';
+          fCtx.fillRect(0, 0, 128, 128);
+          fCtx.fillStyle = '#0f172a';
+          fCtx.beginPath();
+          fCtx.arc(64, 64, 40, 0, Math.PI * 2);
+          fCtx.fill();
+        }
+        const fallbackImg = new Image();
+        fallbackImg.onload = () => renderMosaicWithImage(fallbackImg);
+        fallbackImg.src = fallbackCanvas.toDataURL();
+      }
+    );
+
+    return () => {
+      cleanup();
     };
   }, [selectedSet, selectedTileId, hoveredTileId, loadout, isOpen]);
 
